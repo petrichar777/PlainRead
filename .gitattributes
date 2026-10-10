@@ -1,0 +1,9 @@
+# 跨端项目：统一以 LF 入库与检出，避免 Windows 检出后 shell 脚本在类 Unix 环境失效
+* text=auto eol=lf
+
+# 二进制不做文本转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.icns binary

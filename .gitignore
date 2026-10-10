@@ -1,0 +1,22 @@
+# 工作区本地数据（不入库）
+.workbuddy/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Rust
+target/
+
+# 编辑器 / 系统
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

@@ -1,0 +1,76 @@
+[package]
+name = "plainread"
+version = "0.1.0"
+description = "简阅 · PlainRead —— 纯净版跨端小说阅读器"
+authors = ["王文杰"]
+edition = "2021"
+
+[lib]
+# `_lib` 后缀看着冗余，但必需：让 lib 名与 bin 名不冲突。
+# 这是 Windows 上独有的问题，见 https://github.com/rust-lang/cargo/issues/8519
+name = "plainread_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+# 与下面的 [dependencies].indexmap 成对，缺一不可。
+#
+# 原因：Cargo resolver v2 **不跨"普通依赖域 / 构建依赖域"统一 feature**。
+# schemars 是通过 tauri-build 的 build-dependencies 引入的（HostDep 域），
+# 只在 [dependencies] 里开 std 对它无效——两边都要各开一次。
+indexmap = { version = "1.9", features = ["std"] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# ── 构建环境规避（不是我们在使用 indexmap）────────────────────────────
+#
+# indexmap 1.9.3 的 `[features]` 里**没有 `default`**，所以 `std` 默认是关的。
+# 它的 build.rs 在这种情况下会走 autocfg 分支，真实 spawn 一个 rustc
+# 去探测 std 是否存在：
+#
+#     match env::var_os("CARGO_FEATURE_STD") {
+#         Some(_) => autocfg::emit("has_std"),
+#         None    => autocfg::new().emit_sysroot_crate("std"),   // ← 探测
+#     }
+#
+# 一旦这个探测失败（受限的构建环境、CI 沙箱等），`has_std` 就不会被 emit，
+# 于是 src/map.rs 里 `IndexMap<K, V, S = RandomState>` 退化成
+# `IndexMap<K, V, S>`（三泛型），最终导致 tauri-build 依赖的
+# schemars 0.8.22 编译失败：
+#
+#     error[E0107]: struct takes 3 generic arguments but 2 were supplied
+#
+# 显式启用 `std` 后走 `emit("has_std")` 分支，不再做运行时探测 ——
+# 构建结果是确定的，与能否 spawn 子进程无关。
+#
+# 代价：多一条我们不直接使用的依赖。值得，因为它把"能不能编过"
+# 从环境问题变成了确定性问题。
+indexmap = { version = "1.9", features = ["std"] }
+
+# ── IPC 契约的类型自动生成 ─────────────────────────────────────────────
+# 三个 crate 必须版本对齐：tauri-specta 内部精确依赖 specta 的同一版本。
+# 用 `=` 精确锁版是刻意的——这两个 crate 仍处于 rc 阶段，
+# 升级必须是一次有意识的动作，而不是 `cargo update` 的副作用。
+specta = { version = "=2.0.0-rc.25", features = ["derive"] }
+specta-typescript = "0.0.12"
+tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+
+# ── 项目内核（与 UI 框架无关）────────────────────────────────────────
+reader-core = { path = "../crates/reader-core" }
+
+# 让 `cargo test` 能跑通，也让契约校验进入 CI
+[dev-dependencies]
+tempfile = "3"
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

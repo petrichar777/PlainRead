@@ -1,0 +1,13 @@
+[package]
+name = "reader-core"
+version = "0.1.0"
+edition = "2021"
+description = "简阅 · PlainRead 内核：领域模型、编码识别、章节切分、存储与导入管线（与 UI 框架无关）"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+serde_json = "1"

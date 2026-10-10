@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────
+   设计令牌
+   ─────────────────────────────────────────────────────────────
+   主题色值集中在这里，切换主题只需换一组变量值。
+   与 docs/02-架构设计.md §7.5 的约定保持一致。
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --rd-bg: #ffffff;
+  --rd-surface: #f7f7f5;
+  --rd-border: rgba(0, 0, 0, 0.08);
+  --rd-border-strong: rgba(0, 0, 0, 0.14);
+  --rd-fg: #1a1a1a;
+  --rd-fg-muted: #6b6b6b;
+  --rd-fg-subtle: #9c9c9c;
+
+  --rd-accent: #185fa5;
+  --rd-accent-soft: #e6f1fb;
+  --rd-ok: #0f6e56;
+  --rd-ok-soft: #e1f5ee;
+  --rd-danger: #a32d2d;
+  --rd-danger-soft: #fcebeb;
+
+  --rd-radius: 14px;
+
+  /* 安全区：刘海 / 挖孔 / 底部手势条。
+     桌面端 env() 取不到值，回退为 0。 */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--rd-bg);
+  color: var(--rd-fg);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+    "Source Han Sans SC", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* 避免移动端下拉橡皮筋与长按选择干扰阅读器的后续手势 */
+  overscroll-behavior: none;
+}
+
+/* 表格数字等宽：计数变化时不会左右抖动 */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 页面外壳：统一处理安全区内边距 */
+.rd-shell {
+  min-height: 100%;
+  padding-top: calc(var(--safe-top) + 1.5rem);
+  padding-right: calc(var(--safe-right) + 1.5rem);
+  padding-bottom: calc(var(--safe-bottom) + 1.5rem);
+  padding-left: calc(var(--safe-left) + 1.5rem);
+}
+
+.rd-card {
+  background: var(--rd-bg);
+  border: 0.5px solid var(--rd-border);
+  border-radius: var(--rd-radius);
+}
+
+.rd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+/* 光标闪烁：仅用于"运行中"的提示点 */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes rd-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+  .rd-pulse {
+    animation: rd-pulse 1.6s ease-in-out infinite;
+  }
+}

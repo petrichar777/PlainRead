@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>简阅 · PlainRead · UI 设计草图 v1</title>
+<style>
+/* ============ 页面骨架（非产品 UI，仅草图容器） ============ */
+:root{
+  --pg-bg:#F4F1E9; --pg-card:#FFFFFF; --pg-border:#E5E0D2;
+  --pg-ink:#2B2B26; --pg-ink2:#7A776D;
+  --primary:#2E6B5A; --primary-100:#D7EAE3; --accent:#C2554D;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:var(--pg-bg); color:var(--pg-ink);
+  font-family:system-ui,"Segoe UI","Microsoft YaHei",sans-serif;
+  padding:48px 32px 96px; line-height:1.7;
+}
+.wrap{max-width:1480px;margin:0 auto}
+h1{font-size:28px;font-weight:600;letter-spacing:.5px}
+.sub{color:var(--pg-ink2);font-size:14px;margin:6px 0 36px}
+h2{font-size:18px;font-weight:600;margin:56px 0 6px;padding-left:12px;border-left:4px solid var(--primary)}
+.note{color:var(--pg-ink2);font-size:13px;margin-bottom:20px;padding-left:16px}
+.chips{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;padding-left:16px}
+.chip{background:var(--pg-card);border:1px solid var(--pg-border);border-radius:999px;padding:6px 16px;font-size:13px}
+.chip b{color:var(--primary);font-weight:600}
+
+/* ============ 令牌展示 ============ */
+.palette{display:flex;gap:14px;flex-wrap:wrap;padding-left:16px}
+.swatch{width:132px;background:var(--pg-card);border:1px solid var(--pg-border);border-radius:12px;overflow:hidden;font-size:12px}
+.swatch .c{height:64px}
+.swatch .t{padding:8px 10px}
+.swatch .t b{display:block;font-size:12.5px}
+.swatch .t span{color:var(--pg-ink2);font-size:11px}
+.type-scale{display:flex;gap:28px;align-items:baseline;flex-wrap:wrap;padding:20px 16px;background:var(--pg-card);border:1px solid var(--pg-border);border-radius:12px}
+.type-scale .ts{color:var(--pg-ink2);font-size:12px}
+.type-scale .ts div:first-child{color:var(--pg-ink)}
+
+/* ============ 图标（Lucide 线性，禁 emoji） ============ */
+.ic{width:1em;height:1em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.mi{display:flex;align-items:center;justify-content:center}
+.mi .ic{width:20px;height:20px}
+.seg-mini span{display:flex;align-items:center;justify-content:center}
+.icon-btn .ic,.back .ic{width:20px;height:20px}
+.btn-import{display:inline-flex;align-items:center;gap:6px}
+
+/* ============ 手机外框 ============ */
+.gallery{display:flex;gap:36px;flex-wrap:wrap;padding-left:16px}
+.figure{display:flex;flex-direction:column;gap:10px;width:316px}
+.caption{font-size:13px;color:var(--pg-ink2);padding:0 6px}
+.caption b{color:var(--pg-ink)}
+.phone{
+  width:316px;height:660px;border-radius:40px;background:#111;
+  padding:10px;box-shadow:0 24px 48px rgb(0 0 0/.18);flex-shrink:0;
+}
+.screen{
+  position:relative;width:100%;height:100%;border-radius:32px;overflow:hidden;
+  background:#fff;
+}
+/* 摄像头挖孔 */
+.screen::before{
+  content:"";position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  width:14px;height:14px;border-radius:50%;background:#000;z-index:60;opacity:.85;
+}
+
+/* ============ 阅读主题令牌（与规范 §2.2 一致） ============ */
+.screen[data-theme="paper"]{--rd-bg:#F5EFE1;--rd-fg:#2F2A22;--rd-muted:#8A8272;--rd-line:#E4DCC8;
+  --ui-surface:#FBF8F0;--ui-surface2:#FFFFFF;--ui-border:#E8E2D2;--ui-text1:#2B2B26;--ui-text2:#7A776D}
+.screen[data-theme="white"]{--rd-bg:#FFFFFF;--rd-fg:#1A1A1A;--rd-muted:#8A8A8A;--rd-line:#ECECEC;
+  --ui-surface:#FFFFFF;--ui-surface2:#FFFFFF;--ui-border:#ECECEC;--ui-text1:#1A1A1A;--ui-text2:#8A8A8A}
+.screen[data-theme="night"]{--rd-bg:#121212;--rd-fg:#B8B4AD;--rd-muted:#6B6862;--rd-line:#2A2A2A;
+  --ui-surface:#1A1A1A;--ui-surface2:#242424;--ui-border:#333333;--ui-text1:#E4E1DA;--ui-text2:#8F8C85}
+
+/* ============ 阅读页（真实 CSS 多列分页） ============ */
+.reader{background:var(--rd-bg);color:var(--rd-fg)}
+.r-chapter-title{
+  font-family:Georgia,"Times New Roman","宋体",serif;
+  font-size:21px;font-weight:600;text-align:center;letter-spacing:2px;
+  margin:26px 0 22px;color:var(--rd-fg);
+}
+.r-chapter-title::after{content:"";display:block;width:36px;height:2px;background:var(--accent);margin:12px auto 0;opacity:.75}
+.r-viewport{
+  position:absolute;inset:0;overflow:hidden;background:var(--rd-bg);
+  padding:44px 26px 40px;
+}
+.r-content{
+  height:100%;
+  column-width:calc(100% );column-gap:52px;column-fill:auto;
+  font-family:Georgia,"Times New Roman","宋体",serif;
+  font-size:var(--rd-size,18px);line-height:1.85;letter-spacing:.4px;
+  text-align:justify;text-indent:2em;line-break:strict;
+  will-change:transform;
+}
+.r-content p{margin-bottom:.9em}
+.r-pageinfo{
+  position:absolute;right:18px;bottom:14px;font-size:11px;color:var(--rd-muted);
+  font-family:system-ui,sans-serif;z-index:5;
+}
+.r-zones{position:absolute;inset:0;display:flex;z-index:10}
+.r-zones .z1{width:30%}.r-zones .z2{width:40%}.r-zones .z3{width:30%}
+.r-hint{
+  position:absolute;left:50%;bottom:20px;transform:translateX(-50%);
+  font-size:11px;color:var(--rd-muted);z-index:11;pointer-events:none;
+  background:color-mix(in srgb,var(--rd-bg) 80%,transparent);
+  padding:2px 10px;border-radius:999px;white-space:nowrap;
+}
+
+/* ============ 菜单覆盖层 ============ */
+.r-menu-top,.r-menu-bottom{
+  position:absolute;left:0;right:0;z-index:20;
+  background:var(--ui-surface);border-color:var(--ui-border);
+  transition:transform 280ms cubic-bezier(.2,0,0,1),opacity 280ms;
+}
+.r-menu-top{top:0;padding:34px 18px 12px;display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid var(--ui-border);transform:translateY(-105%)}
+.r-menu-bottom{bottom:0;padding:16px 18px 22px;
+  border-top:1px solid var(--ui-border);transform:translateY(105%)}
+.reader.menu-open .r-menu-top,.reader.menu-open .r-menu-bottom{transform:translateY(0)}
+.r-menu-top .back{font-size:20px;color:var(--ui-text1);width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:10px}
+.r-menu-top .bt{flex:1;min-width:0}
+.r-menu-top .bt .b1{font-size:15px;font-weight:600;color:var(--ui-text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r-menu-top .bt .b2{font-size:12px;color:var(--ui-text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.icon-btn{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  font-size:17px;color:var(--ui-text1);border:1px solid var(--ui-border);background:var(--ui-surface2)}
+.theme-dots{display:flex;gap:14px;align-items:center;justify-content:center;margin-bottom:12px}
+.tdot{width:30px;height:30px;border-radius:50%;border:2px solid var(--ui-border);cursor:pointer;position:relative}
+.tdot.sel{outline:2px solid var(--primary);outline-offset:2px}
+.tdot.paper{background:#F5EFE1}.tdot.white{background:#fff}.tdot.night{background:#121212;border-color:#444}
+.slider-row{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ui-text2);margin-bottom:10px}
+.slider-row label{width:34px;flex-shrink:0}
+.slider-row input[type=range]{flex:1;accent-color:var(--primary);height:20px}
+.menu-btns{display:flex;justify-content:space-around;padding-top:4px}
+.mb{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--ui-text1);cursor:pointer}
+.mb .mi{width:46px;height:46px;border-radius:14px;background:var(--ui-surface2);border:1px solid var(--ui-border);
+  display:flex;align-items:center;justify-content:center;font-size:19px}
+.menu-dim{position:absolute;inset:0;background:rgb(0 0 0/.35);opacity:0;pointer-events:none;transition:opacity 280ms;z-index:15}
+.menu-open .menu-dim{opacity:1;pointer-events:auto}
+
+/* ============ 书架 ============ */
+.shelf{background:var(--ui-surface);height:100%;padding:44px 18px 18px;overflow:hidden}
+.shelf-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.shelf-top h3{font-size:20px;font-weight:600;color:var(--ui-text1)}
+.shelf-top .acts{display:flex;gap:8px}
+.seg-mini{display:flex;border:1px solid var(--ui-border);border-radius:8px;overflow:hidden;font-size:12px}
+.seg-mini span{padding:4px 10px;color:var(--ui-text2)}
+.seg-mini span.on{background:var(--primary);color:#fff}
+.btn-import{background:var(--primary);color:#fff;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:500}
+.shelf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 14px}
+.bcard{cursor:pointer;transition:transform 120ms}
+.bcard:active{transform:scale(.97)}
+.cover{aspect-ratio:3/4;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-family:Georgia,"宋体",serif;font-size:34px;color:#fff;box-shadow:0 1px 3px rgb(0 0 0/.14);position:relative;overflow:hidden}
+.cover::after{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgb(255 255 255/.16),transparent 55%)}
+.cov-1{background:linear-gradient(150deg,#5B7A6F,#39544A)}
+.cov-2{background:linear-gradient(150deg,#A8846B,#7C5C46)}
+.cov-3{background:linear-gradient(150deg,#6B7FA3,#46587A)}
+.cov-4{background:linear-gradient(150deg,#9A6B6B,#6E4545)}
+.cov-5{background:linear-gradient(150deg,#7D8A5C,#565F3B)}
+.cov-6{background:linear-gradient(150deg,#8A7BA0,#5C5173)}
+.bmeta{margin-top:8px}
+.bmeta .bn{font-size:13px;font-weight:500;color:var(--ui-text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bmeta .bp{font-size:11px;color:var(--ui-text2)}
+.bmeta .bp i{font-style:normal;color:var(--accent)}
+
+/* ============ 目录抽屉 ============ */
+.toc-screen{background:var(--rd-bg)}
+.toc-dim{position:absolute;inset:0;background:rgb(0 0 0/.4);z-index:20}
+.toc-drawer{
+  position:absolute;top:0;bottom:0;left:0;width:82%;z-index:21;
+  background:var(--ui-surface);border-right:1px solid var(--ui-border);
+  border-radius:0 20px 20px 0;padding:48px 0 12px;display:flex;flex-direction:column;
+}
+.toc-head{padding:0 20px 14px;border-bottom:1px solid var(--ui-border)}
+.toc-head .t1{font-size:17px;font-weight:600;color:var(--ui-text1)}
+.toc-head .t2{font-size:12px;color:var(--ui-text2);margin-top:2px}
+.toc-tabs{display:flex;gap:20px;padding:12px 20px 0;font-size:13px;color:var(--ui-text2)}
+.toc-tabs .on{color:var(--primary);font-weight:600;position:relative}
+.toc-tabs .on::after{content:"";position:absolute;left:0;right:0;bottom:-9px;height:2px;background:var(--primary);border-radius:2px}
+.toc-list{flex:1;overflow:hidden;padding:10px 0}
+.toc-item{padding:11px 20px;font-size:14px;color:var(--ui-text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-left:3px solid transparent}
+.toc-item.cur{color:var(--primary);font-weight:600;background:var(--primary-100);border-left-color:var(--accent)}
+.toc-item small{color:var(--ui-text2);font-weight:400;font-size:11px;margin-right:8px}
+
+/* ============ 设置面板（底部 sheet） ============ */
+.set-screen{background:var(--rd-bg);color:var(--rd-fg)}
+.set-fakepage{position:absolute;inset:0;padding:52px 30px 0;font-size:15px;line-height:2;color:var(--rd-muted);
+  font-family:Georgia,"宋体",serif;transform:scale(.98);transform-origin:center 30%;filter:brightness(.92)}
+.set-sheet{
+  position:absolute;left:0;right:0;bottom:0;z-index:30;
+  background:var(--ui-surface);border-radius:20px 20px 0 0;
+  border-top:1px solid var(--ui-border);box-shadow:0 -8px 24px rgb(0 0 0/.12);
+  padding:14px 20px 24px;
+}
+.set-sheet .grab{width:36px;height:4px;border-radius:2px;background:var(--ui-border);margin:0 auto 14px}
+.set-sheet h4{font-size:15px;font-weight:600;color:var(--ui-text1);margin-bottom:12px}
+.theme-dots.left{justify-content:flex-start;margin-bottom:14px}
+.range-row{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ui-text2);margin-bottom:12px}
+.range-row label{width:56px;flex-shrink:0}
+.range-row .val{width:36px;text-align:right;color:var(--ui-text1);font-variant-numeric:tabular-nums}
+.range-row input[type=range]{flex:1;accent-color:var(--primary)}
+.set-sheet .seg{display:flex;border:1px solid var(--ui-border);border-radius:10px;overflow:hidden;font-size:13px;margin-bottom:4px}
+.set-sheet .seg span{flex:1;text-align:center;padding:8px 0;color:var(--ui-text2)}
+.set-sheet .seg span.on{background:var(--primary);color:#fff}
+
+/* ============ 边界回弹 ============ */
+@keyframes bounceL{0%{transform:translateX(0)}40%{transform:translateX(10px)}100%{transform:translateX(0)}}
+@keyframes bounceR{0%{transform:translateX(0)}40%{transform:translateX(-10px)}100%{transform:translateX(0)}}
+.bounce-l{animation:bounceL 220ms ease}
+.bounce-r{animation:bounceR 220ms ease}
+</style>
+</head>
+<body>
+<!-- Lucide 图标 sprite（ISC License · lucide.dev）—— 草图单文件内联，实现阶段统一走 lucide-react <Icon> 组件 -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><defs>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></symbol>
+  <symbol id="i-type" viewBox="0 0 24 24"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+</defs></svg>
+<div class="wrap">
+  <h1>简阅 · PlainRead · UI 设计草图 v1</h1>
+  <div class="sub">配套文档：《05-UI设计规范系统.md》 · 纸黄 / 白 / 夜间三主题 · 黛青 × 朱砂 · 图标：Lucide（禁 emoji） · 2026-10-09</div>
+
+  <h2>设计原则</h2>
+  <div class="chips">
+    <span class="chip"><b>①</b> 内容即界面 —— 阅读态零常驻 UI</span>
+    <span class="chip"><b>②</b> 动效为因果服务，不做装饰</span>
+    <span class="chip"><b>③</b> 书卷气，不是科技感</span>
+    <span class="chip"><b>④</b> 高频操作触达 ≤ 2 步</span>
+    <span class="chip"><b>⑤</b> 双端同源，桌面 = 大号手机</span>
+  </div>
+
+  <h2>核心令牌</h2>
+  <div class="note">完整定义见规范文档 §2。所有值最终落为 theme.css 的 CSS 变量，组件禁止裸色值。</div>
+  <div class="palette">
+    <div class="swatch"><div class="c" style="background:linear-gradient(150deg,#3E8772,#265649)"></div><div class="t"><b>黛青 · Primary</b><span>#2E6B5A · 主操作/选中/进度</span></div></div>
+    <div class="swatch"><div class="c" style="background:linear-gradient(150deg,#D0685F,#A8433B)"></div><div class="t"><b>朱砂 · Accent</b><span>#C2554D · 仅书签/当前章点睛</span></div></div>
+    <div class="swatch"><div class="c" style="background:#F5EFE1;border-bottom:1px solid #eee"></div><div class="t"><b>纸黄 · 默认主题</b><span>bg #F5EFE1 / 字 #2F2A22</span></div></div>
+    <div class="swatch"><div class="c" style="background:#FFFFFF;border-bottom:1px solid #eee"></div><div class="t"><b>白 · 主题</b><span>bg #FFFFFF / 字 #1A1A1A</span></div></div>
+    <div class="swatch"><div class="c" style="background:#121212"></div><div class="t"><b>夜间 · 主题</b><span>bg #121212 / 字 #B8B4AD 暖灰不刺眼</span></div></div>
+  </div>
+  <div class="note" style="margin-top:18px">动效：按压 <b>120ms</b> · 翻页 <b>220ms</b>（跟手拖拽）· 面板 <b>280ms</b> · 主题切换 <b>300ms</b> crossfade；夜间层级用描边替代阴影。</div>
+
+  <h2>① 书架 · 网格模式</h2>
+  <div class="note">TXT 无封面 → 书名首字 + hash 莫兰迪底色生成占位封面；点按<b>直接进阅读页</b>（无详情页中间层）；长按多选删除/重命名。</div>
+  <div class="gallery">
+    <div class="figure">
+      <div class="phone"><div class="screen" data-theme="paper">
+        <div class="shelf">
+          <div class="shelf-top">
+            <h3>书架</h3>
+            <div class="acts">
+              <div class="seg-mini"><span class="on"><svg class="ic"><use href="#i-grid"/></svg></span><span><svg class="ic"><use href="#i-list"/></svg></span></div>
+              <div class="btn-import"><svg class="ic"><use href="#i-plus"/></svg>导入</div>
+            </div>
+          </div>
+          <div class="shelf-grid">
+            <div class="bcard"><div class="cover cov-1">长</div><div class="bmeta"><div class="bn">长安十二时辰</div><div class="bp">继续阅读 · <i>68%</i></div></div></div>
+            <div class="bcard"><div class="cover cov-2">三</div><div class="bmeta"><div class="bn">三体</div><div class="bp">读完</div></div></div>
+            <div class="bcard"><div class="cover cov-3">明</div><div class="bmeta"><div class="bn">明朝那些事儿</div><div class="bp">继续阅读 · <i>12%</i></div></div></div>
+            <div class="bcard"><div class="cover cov-4">白</div><div class="bmeta"><div class="bn">白鹿原</div><div class="bp">未读</div></div></div>
+            <div class="bcard"><div class="cover cov-5">平</div><div class="bmeta"><div class="bn">平凡的世界</div><div class="bp">继续阅读 · <i>45%</i></div></div></div>
+            <div class="bcard"><div class="cover cov-6">围</div><div class="bmeta"><div class="bn">围城</div><div class="bp">未读</div></div></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="caption"><b>顶部栏 56px</b>：视图切换（网格/列表记忆态）+ 主按钮导入。进度副标题朱砂高亮百分比。</div>
+    </div>
+
+  <h2>② 阅读页 · 菜单呼出（夜间）</h2>
+  <div class="note">沉浸态零常驻 UI；点中央呼出上下双条覆盖菜单，<b>正文不重排不缩放</b>。夜间是深灰 #121212，正文暖灰不刺眼。</div>
+    <div class="figure">
+      <div class="phone"><div class="screen reader menu-open" data-theme="night" style="background:var(--rd-bg)">
+        <div class="r-viewport">
+          <div class="r-chapter-title" style="font-size:17px">第四十二章 · 夜航</div>
+          <p style="font-family:Georgia,'宋体',serif;font-size:16px;line-height:1.9;text-align:justify;text-indent:2em">船行至江心，风忽然大了。他裹紧外衣，望着远处几点渔火，在墨色的水面上明明灭灭。艄公说，过了这道湾，天亮前便能靠岸。</p>
+          <p style="font-family:Georgia,'宋体',serif;font-size:16px;line-height:1.9;text-align:justify;text-indent:2em">他没有睡。袖中那半页残信已被摩挲得起了毛边，字迹淡得几乎要融进纸里。</p>
+        </div>
+        <div class="r-pageinfo" style="font-size:11px">217 / 486</div>
+        <div class="menu-dim"></div>
+        <div class="r-menu-top">
+          <div class="back"><svg class="ic"><use href="#i-back"/></svg></div>
+          <div class="bt"><div class="b1">平凡的世界</div><div class="b2">第四十二章 · 夜航</div></div>
+          <div class="icon-btn"><svg class="ic"><use href="#i-pen"/></svg></div>
+        </div>
+        <div class="r-menu-bottom">
+          <div class="theme-dots">
+            <div class="tdot paper"></div><div class="tdot white"></div><div class="tdot night sel"></div>
+          </div>
+          <div class="slider-row"><label>进度</label><input type="range" min="0" max="100" value="45"><span style="width:34px;text-align:right">45%</span></div>
+          <div class="menu-btns">
+            <div class="mb"><div class="mi"><svg class="ic"><use href="#i-list"/></svg></div>目录</div>
+            <div class="mb"><div class="mi"><svg class="ic"><use href="#i-bookmark"/></svg></div>书签</div>
+            <div class="mb"><div class="mi"><svg class="ic"><use href="#i-type"/></svg></div>设置</div>
+            <div class="mb"><div class="mi"><svg class="ic"><use href="#i-sun"/></svg></div>常亮</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="caption"><b>菜单为覆盖层</b>：280ms 上下滑入；主题三圆票直选；进度滑杆拖动时浮出目标章节名气泡。</div>
+    </div>
+
+  <h2>③ 目录抽屉 &nbsp;·&nbsp; ④ 设置面板</h2>
+  <div class="note">目录：左抽屉 82% 宽、当前章朱砂指示条、3000 章虚拟滚动。设置：<b>底部 sheet 半透明场景</b>，滑杆拖动即时预览正文变化，松手才落盘。</div>
+    <div class="figure">
+      <div class="phone"><div class="screen toc-screen" data-theme="paper">
+        <div class="r-viewport" style="opacity:.35">
+          <div class="r-chapter-title" style="font-size:17px">第八章 · 入城</div>
+          <p style="font-family:Georgia,'宋体',serif;font-size:16px;line-height:1.9;text-align:justify;text-indent:2em">城门在望，长队如龙。守卒挨个查验路引，日头毒得很，队伍挪得比蜗牛还慢。</p>
+        </div>
+        <div class="toc-dim"></div>
+        <div class="toc-drawer">
+          <div class="toc-head"><div class="t1">长安十二时辰</div><div class="t2">共 324 章 · 已读 68%</div></div>
+          <div class="toc-tabs"><span class="on">章节</span><span>书签</span></div>
+          <div class="toc-list">
+            <div class="toc-item"><small>215</small>第五节 · 西市</div>
+            <div class="toc-item"><small>216</small>第六节 · 望楼</div>
+            <div class="toc-item cur"><small>217</small>第四十二章 · 夜航</div>
+            <div class="toc-item"><small>218</small>第四十三章 · 拂晓</div>
+            <div class="toc-item"><small>219</small>第四十四章 · 宫门</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="caption"><b>章节/书签双 tab 同栏</b>，避免两个入口。滑入 280ms，动画期间不全量渲染 DOM。</div>
+    </div>
+    <div class="figure">
+      <div class="phone"><div class="screen set-screen" data-theme="paper">
+        <div class="set-fakepage">
+          城门在望，长队如龙。守卒挨个查验路引，日头毒得很，队伍挪得比蜗牛还慢。他排在队尾，数着前面还有十七人，盘算着入城后先去哪里打尖。
+        </div>
+        <div class="set-sheet">
+          <div class="grab"></div>
+          <h4>阅读设置</h4>
+          <div class="theme-dots left">
+            <div class="tdot paper sel"></div><div class="tdot white"></div><div class="tdot night"></div>
+          </div>
+          <div class="range-row"><label>字号</label><input type="range" min="14" max="28" value="19"><span class="val">19</span></div>
+          <div class="range-row"><label>行距</label><input type="range" min="14" max="22" value="18"><span class="val">1.8</span></div>
+          <div class="range-row"><label>边距</label><input type="range" min="16" max="48" value="26"><span class="val">26</span></div>
+          <div class="seg"><span class="on">平移</span><span>覆盖</span><span>上下滚动</span></div>
+        </div>
+      </div></div>
+      <div class="caption"><b>即时预览</b>：面板不遮死正文（背后可见、微缩压暗），拖滑杆 rAF 节流重排，锚点保证不丢位置。</div>
+    </div>
+  </div>
+
+  <h2>⑤ 交互演示机（可操作）</h2>
+  <div class="note">真实运行架构 §7.1 的 CSS 多列分页：<b>点左/右分区翻页 · 点中央呼出菜单 · 左右拖拽跟手翻页 · 主题三圆即时切换 · 字号滑杆即时生效且尽量不丢位置</b>。到边界会有回弹反馈。</div>
+  <div class="gallery">
+    <div class="figure" style="width:356px">
+      <div class="phone" style="width:356px;height:700px"><div class="screen reader" id="demoScreen" data-theme="paper">
+        <div class="r-viewport" id="demoVp">
+          <div class="r-content" id="demoContent">
+            <div class="r-chapter-title">第一章 · 风起</div>
+            <p>暮春三月，草长莺飞。江南的雨总是来得没有预兆，前一还是晴空万里，这一便淅淅沥沥地落了下来，把青石板街洗得发亮。</p>
+            <p>沈砚之撑着一把油纸伞，站在渡口的茶棚下。他已经在这里站了半个时辰，目光始终落在江面上那艘缓缓靠岸的乌篷船上。</p>
+            <p>船头立着一个灰衣人，斗笠压得很低，看不清面目。船未靠稳，灰衣人便一跃上了岸，脚步极快，转眼便到了茶棚前。</p>
+            <p>"沈公子。"灰衣人摘下斗笠，露出一张风霜之色甚重的脸，"东西带来了。"</p>
+            <p>沈砚之不动声色地收了伞："进来说。"</p>
+            <p>茶棚深处，两人对坐。灰衣人从怀中取出一个油布包，层层揭开，里面是半页泛黄的残信。信上的字迹已经淡得几乎看不清了，只有落款处的一方朱印，红得刺眼。</p>
+            <p>"二十年了。"沈砚之的手指抚过那方朱印，声音很轻，像是在自言自语，"我以为这一辈子都等不到了。"</p>
+            <p>"大人说，当年之事，另有隐情。这半页信，只是个开头。"灰衣人压低了声音，"其余的，要您亲自去取。"</p>
+            <p>"去哪里取？"</p>
+            <p>"北边。"灰衣人顿了顿，"雁门关外。"</p>
+            <p>雨声忽然大了。棚外有马蹄声疾驰而过，溅起一路水花。沈砚之抬眼望去，那骑手一身玄衣，背后斜插着一杆小小的令旗——是节度使府的传令兵。</p>
+            <p>他把残信重新包好，贴身收了，然后从袖中摸出一锭银子放在桌上："辛苦。替我谢过大人。"</p>
+            <p>灰衣人却没有走："沈公子，还有一句话。大人说，信送到之日，就是您动身之时。京中的眼睛，已经盯上您了。"</p>
+            <p>沈砚之端起茶盏，茶已经凉了。他一饮而尽，站起身来，把银子推了过去："我知道了。"</p>
+            <p>他走出茶棚，雨还在下。江面上雾气渐起，远山如黛。他把油纸伞往肩上一搭，朝着与来路相反的方向，走进了雨里。</p>
+            <p>没有人注意到，茶棚角落里那个一直打瞌睡的跑堂，在他转身的那一刻，悄悄睁开了眼睛。</p>
+          </div>
+        </div>
+        <div class="r-pageinfo" id="demoProg">1 / 1</div>
+        <div class="r-zones" id="demoZones">
+          <div class="z1"></div><div class="z2"></div><div class="z3"></div>
+        </div>
+        <div class="r-hint" id="demoHint">左右拖拽跟手翻页 · 点中央呼出菜单</div>
+        <div class="menu-dim" id="demoDim"></div>
+        <div class="r-menu-top" id="demoTop">
+          <div class="back"><svg class="ic"><use href="#i-back"/></svg></div>
+          <div class="bt"><div class="b1">雁门归客</div><div class="b2" id="demoChapter">第一章 · 风起</div></div>
+          <div class="icon-btn"><svg class="ic"><use href="#i-pen"/></svg></div>
+        </div>
+        <div class="r-menu-bottom">
+          <div class="theme-dots">
+            <div class="tdot paper sel" data-th="paper" title="纸黄"></div>
+            <div class="tdot white" data-th="white" title="白"></div>
+            <div class="tdot night" data-th="night" title="夜间"></div>
+          </div>
+          <div class="slider-row"><label>字号</label><input type="range" id="demoFont" min="14" max="26" value="18"><span style="width:34px;text-align:right" id="demoFontVal">18</span></div>
+          <div class="menu-btns">
+            <div class="mb"><div class="mi"><svg class="ic"><use href="#i-list"/></svg></div>目录</div>
+            <div class="mb"><div class="mi"><svg class="ic"><use href="#i-bookmark"/></svg></div>书签</div>
+            <div class="mb"><div class="mi"><svg class="ic"><use href="#i-type"/></svg></div>设置</div>
+            <div class="mb"><div class="mi"><svg class="ic"><use href="#i-sun"/></svg></div>常亮</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="caption"><b>演示机即真实实现</b>：column-fill:auto + transform 位移 220ms；拖拽 1:1 跟手，松手按位移判定落点；改字号后锚点回定位（与 M2 验收同源）。</div>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:56px;padding-left:16px">—— 简阅 · PlainRead Design System v1 · 像素君 · 2026-10-09 · 配套规范见 docs/05-UI设计规范系统.md</div>
+</div>
+
+<script>
+(function(){
+  const vp = document.getElementById('demoVp');
+  const content = document.getElementById('demoContent');
+  const prog = document.getElementById('demoProg');
+  const screen = document.getElementById('demoScreen');
+  const zones = document.getElementById('demoZones');
+  const hint = document.getElementById('demoHint');
+  let page = 0, pages = 1;
+
+  function metrics(){
+    // column-width 不接受百分比：由 JS 按视口内容宽度以 px 设定（与真实实现一致）
+    const cs = getComputedStyle(vp);
+    const inner = vp.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    content.style.columnWidth = inner + 'px';
+    const gap = parseFloat(getComputedStyle(content).columnGap) || 0;
+    const stride = inner + gap;
+    const total = content.scrollWidth;
+    pages = Math.max(1, Math.round((total + gap) / stride));
+    return { stride, gap };
+  }
+  function render(anim){
+    const {stride} = metrics();
+    page = Math.min(Math.max(page,0), pages-1);
+    content.style.transition = anim ? 'transform 220ms cubic-bezier(.25,.1,.25,1)' : 'none';
+    content.style.transform = 'translateX(' + (-page*stride) + 'px)';
+    prog.textContent = (page+1) + ' / ' + pages;
+  }
+  function bounce(dir){
+    content.classList.remove('bounce-l','bounce-r');
+    void content.offsetWidth;
+    content.classList.add(dir<0 ? 'bounce-l' : 'bounce-r');
+  }
+  function go(n){
+    if(n<0 || n>=pages){ bounce(n<0?-1:1); render(true); return; }
+    page = n; render(true);
+  }
+
+  // 三分区点击 + 拖拽跟手
+  let dragging=false, startX=0, baseOffset=0, moved=false, lastX=0, lastT=0, vx=0;
+  zones.addEventListener('pointerdown', e=>{
+    dragging=true; moved=false; startX=lastX=e.clientX; lastT=performance.now(); vx=0;
+    baseOffset = -page*metrics().stride;
+    content.style.transition='none';
+    zones.setPointerCapture(e.pointerId);
+  });
+  zones.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    const dx = e.clientX - startX;
+    if(Math.abs(dx)>6) { moved=true; hint.style.opacity='0'; }
+    let apply = baseOffset + dx;
+    const min = -(pages-1)*metrics().stride;
+    if(apply>0) apply *= 0.35;                 // 边缘橡皮筋
+    if(apply<min) apply = min + (apply-min)*0.35;
+    content.style.transform = 'translateX('+apply+'px)';
+    const now = performance.now();
+    if(now-lastT>0) vx = (e.clientX-lastX)/(now-lastT);
+    lastX=e.clientX; lastT=now;
+  });
+  zones.addEventListener('pointerup', e=>{
+    if(!dragging) return; dragging=false;
+    const dx = e.clientX - startX;
+    if(!moved){
+      const r = zones.getBoundingClientRect();
+      const rel = e.clientX - r.left;
+      if(rel < r.width*0.3) go(page-1);
+      else if(rel > r.width*0.7) go(page+1);
+      else { screen.classList.toggle('menu-open'); render(false); }
+      return;
+    }
+    if(dx < -60 || vx < -0.45) go(page+1);
+    else if(dx > 60 || vx > 0.45) go(page-1);
+    else render(true);
+  });
+
+  // 点遮罩关闭菜单
+  document.getElementById('demoDim').addEventListener('click', ()=> screen.classList.remove('menu-open'));
+
+  // 主题切换（crossfade 由浏览器变量切换即时呈现）
+  document.querySelectorAll('#demoScreen .tdot').forEach(d=>{
+    d.addEventListener('click', ()=>{
+      document.querySelectorAll('#demoScreen .tdot').forEach(x=>x.classList.remove('sel'));
+      d.classList.add('sel');
+      screen.dataset.theme = d.dataset.th;
+    });
+  });
+
+  // 字号调节：字号变、锚点尽量不丢（演示版：按比例保持页位）
+  const fontSlider = document.getElementById('demoFont');
+  const fontVal = document.getElementById('demoFontVal');
+  fontSlider.addEventListener('input', ()=>{
+    const ratio = page / Math.max(1,pages-1);
+    fontVal.textContent = fontSlider.value;
+    screen.style.setProperty('--rd-size', fontSlider.value+'px');
+    requestAnimationFrame(()=>{
+      render(false);
+      page = Math.round(ratio*(pages-1));
+      render(false);
+    });
+  });
+
+  // 首次布局 + 自适应
+  const boot = ()=>{ render(false); };
+  window.addEventListener('resize', boot);
+  setTimeout(boot, 60);
+  setTimeout(()=>{ hint.style.transition='opacity 600ms'; }, 100);
+  setTimeout(()=>{ hint.style.opacity='0'; }, 6000);
+})();
+</script>
+</body>
+</html>

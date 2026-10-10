@@ -1,0 +1,23 @@
+<!doctype html>
+<!--
+  lang="zh-Hans" 不是装饰：
+  没有语言标注，CSS 的 line-break / text-spacing-trim 部分行为不会生效，
+  中文断行与标点挤压会退化为普通表现。详见 docs/02-架构设计.md §7.2
+-->
+<html lang="zh-Hans">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <!-- viewport-fit=cover 是 env(safe-area-inset-*) 生效的前提，安卓刘海/手势条适配依赖它 -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>简阅 · PlainRead</title>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
