@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "gen:bindings": "cargo test --manifest-path src-tauri/Cargo.toml --lib --quiet",
+    "gen:bindings": "cargo test -p plainread --lib --quiet",
     "build": "npm run gen:bindings && tsc && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

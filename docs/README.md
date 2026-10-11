@@ -36,6 +36,7 @@
 | [adr/ADR-002-存储与索引格式.md](adr/ADR-002-存储与索引格式.md) | 为什么选 redb 而不是 SQLite；章节索引 blob 化的设计 | 决策留痕 |
 | [adr/ADR-003-采用Tauri2作为跨端外壳.md](adr/ADR-003-采用Tauri2作为跨端外壳.md) | **当前有效**：为什么改用 Tauri 2，以及分页引擎为何整块废弃 | 决策留痕 |
 | [adr/ADR-004-前端技术栈选型.md](adr/ADR-004-前端技术栈选型.md) | 为什么选 React + Tailwind + shadcn/ui | 决策留痕 |
+| [adr/ADR-005-采用Cargo工作区与工程落盘固定盘.md](adr/ADR-005-采用Cargo工作区与工程落盘固定盘.md) | **当前有效**：为什么引入 Cargo 工作区，以及为什么把工程从 U 盘迁到固定盘（含实测数据） | 决策留痕 |
 | [archive/](archive/) | 旧版产出归档（egui 方案的架构设计与里程碑清单），**不删除，保留历史版本** | 历史 |
 
 ---

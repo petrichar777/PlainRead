@@ -8,6 +8,7 @@
 
 ```
 code/
+├─ Cargo.toml              ★ workspace 根（虚拟清单，聚合下面两个 Rust 成员）
 ├─ src/                    前端（HTML / TypeScript / React）—— 可整体替换
 │  ├─ ipc/bindings.ts      ★ 由 tauri-specta 从 Rust 自动生成，勿手改
 │  ├─ styles/main.css      设计令牌（CSS 变量）+ Tailwind 入口
@@ -18,12 +19,17 @@ code/
 │     ├─ ipc/              DTO 与「内核类型 → DTO」映射
 │     ├─ error.rs          统一错误类型（带机器可读分类）
 │     └─ lib.rs            契约登记 + 应用装配
-└─ crates/reader-core/     内核：领域 / 编码 / 切章 / 存储 / 导入管线
+├─ crates/reader-core/     内核：领域 / 编码 / 切章 / 存储 / 导入管线
+└─ target/                 构建产物（workspace 级，**在根目录而非 src-tauri/**）
 ```
 
 **依赖方向是单向的**：`src`（前端）→ `src-tauri`（外壳）→ `reader-core`（内核）。
 内核**不依赖任何 UI 框架**（依赖树里不能出现 tauri / egui / web），
 这样它才能在没有窗口、没有 GPU 的环境里被完整单元测试，也才能在换 UI 技术栈时一行不改。
+
+> **两个 workspace 相关的坑**（见 [docs/adr/ADR-005](../../docs/adr/ADR-005-采用Cargo工作区与工程落盘固定盘.md)）：
+> ① `target/` 在 `code/` 下，**不是** `src-tauri/target/`；
+> ② `[profile.release]` 必须写在根 `Cargo.toml`，写在成员清单里会被 cargo **静默忽略**。
 
 ---
 
@@ -53,14 +59,15 @@ code/
 | `npm run typecheck` | `tsc --noEmit` 类型检查 |
 | `npm run build` | 生成绑定 → 类型检查 → 产出 `dist/` |
 
-内核与外壳（Rust）：
+内核与外壳（Rust，在 `code/` 下 —— workspace 根，无需 `--manifest-path`）：
 
 | 命令 | 作用 |
 |---|---|
 | `cargo test -p reader-core` | 跑内核全部单测（含两条不变式的守卫测试） |
-| `cargo test --manifest-path src-tauri/Cargo.toml` | 跑外壳测试，并**顺带重新生成前端绑定** |
-| `cargo clippy -- -D warnings` | 静态检查（CI 门禁） |
-| `cargo fmt` | 格式化 |
+| `cargo test -p plainread --lib` | 跑外壳测试，并**顺带重新生成前端绑定** |
+| `cargo test --workspace` | 一次跑完两个成员 |
+| `cargo clippy --workspace --all-targets -- -D warnings` | 静态检查（CI 门禁） |
+| `cargo fmt --all` | 格式化 |
 
 脚本（`scripts/`）：
 
@@ -112,16 +119,24 @@ CI 用 `git diff --exit-code` 就能发现「改了 Rust 类型却忘了同步�
 
 ## 已验证的状态（2026-10-11）
 
+工程已从 U 盘（`E:` / FAT32）迁到固定盘 `C:\项目\简阅` 并引入 workspace，见 [ADR-005](../../docs/adr/ADR-005-采用Cargo工作区与工程落盘固定盘.md)。
+
 | 检查 | 结果 |
 |---|---|
-| `cargo test -p reader-core` | ✅ 16 项通过（领域模型序列化往返 / 时间戳 / ID / 章节区间切片） |
-| `cargo test --manifest-path src-tauri/Cargo.toml --lib` | ✅ 13 项通过（错误类型、DTO、契约导出与落点） |
+| `cargo test --workspace` | ✅ 29 项通过（内核 16 + 外壳 13） |
 | `npm run typecheck` | ✅ 零错误 |
-| `npm run build` | ✅ 产出 `dist/`（JS 227 kB / CSS 14.5 kB） |
 | `npm run lint` | ✅ 零告警 |
-| `cargo clippy --all-targets -- -D warnings` | ✅ 零告警（两个 crate） |
-| `cargo fmt --check` | ✅ 干净（两个 crate） |
+| `npm run build` | ✅ 产出 `dist/`（JS 227 kB / CSS 14.5 kB） |
+| `cargo clippy --workspace --all-targets -- -D warnings` | ✅ 零告警 |
+| `cargo fmt --all --check` | ✅ 干净 |
 | 契约链路 | ✅ 改动 Rust DTO 字段后重新生成绑定，前端 `tsc` 立即报错 |
+
+**构建耗时（迁移前 → 迁移后）**
+
+| 步骤 | U 盘 / FAT32 | 固定盘 + workspace |
+|---|---|---|
+| 完整工作区构建（依赖 + 测试二进制） | 39 min | **3 min 26 s**（约 11×） |
+| `cargo clippy --all-targets` | 约 35 min | **1 min 55 s** |
 
 **尚未验证**：
 
@@ -138,3 +153,4 @@ CI 用 `git diff --exit-code` 就能发现「改了 Rust 类型却忘了同步�
 | `cargo test` 启动即崩 `0xc0000139` | 测试二进制拿不到 Common Controls v6 清单，comctl32 v5 缺 `TaskDialogIndirect` | `build.rs` 发 `/DELAYLOAD:comctl32.dll` |
 | 契约导出失败（整个前端编不过） | specta 默认禁止把 `i64` 导出到 TS（精度） | 逐字段 `#[specta(type = Option<Number>)]` |
 | 契约测试假失败 | 两个测试并行、靠副作用互相依赖 | 合并为自包含测试；导出路径改绝对路径 |
+| 编译奇慢（39 min） | 工程在 **U 盘 + FAT32**（无硬链接 → 增量缓存退化为复制） | 迁到固定盘 `C:\项目\简阅`（见 ADR-005） |

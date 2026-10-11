@@ -67,10 +67,7 @@ reader-core = { path = "../crates/reader-core" }
 [dev-dependencies]
 tempfile = "3"
 
-# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
-[profile.release]
-codegen-units = 1
-lto = true
-opt-level = 3
-panic = "abort"
-strip = true
+# ⚠️ `[profile.release]` **不在**这里 —— 它已上移到 workspace 根清单
+# （`code/Cargo.toml`）。原因：cargo 只认 workspace 根的 profiles，
+# 写在成员清单里的 profile 会被**静默忽略**（release 的 LTO / strip /
+# panic=abort 会失效，包体积直接变大）。修改发布档优化请改根清单。

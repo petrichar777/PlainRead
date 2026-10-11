@@ -1,0 +1,36 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Cargo workspace 根清单（虚拟清单：本身不是 package，只做聚合）
+# ═══════════════════════════════════════════════════════════════════════
+#
+# 为什么加这一层（完整论证见 docs/adr/ADR-005）：
+#
+#   1. **单一 Cargo.lock** —— 外壳与内核不再各自解析出可能漂移的依赖版本。
+#      此前两个成员各有一份 lock，同一个传递依赖完全可能被解析成两个版本。
+#   2. **单一 target/** —— 同一批依赖只编译一次。此前 reader-core 会在
+#      `crates/reader-core/target` 与 `src-tauri/target` 各编一份。
+#   3. **命令不再需要 `--manifest-path`** —— `cargo test -p plainread`、
+#      `cargo clippy --workspace` 可直接在 `code/` 下执行。
+#
+# ⚠️ 两个必须记住的连带影响：
+#
+#   · **target 目录位置变了**：现在是 `code/target/`，不再是 `src-tauri/target/`。
+#     任何写死了旧路径的脚本/文档都要跟着改。
+#   · **成员 Cargo.toml 里的 [profile.*] 会被忽略**（cargo 只认根清单的）。
+#     所以原本写在 src-tauri/Cargo.toml 的 `[profile.release]` 已上移到本文件末尾 ——
+#     不搬的话 release 的 LTO / strip / panic=abort 会**静默失效**，包体积直接变大。
+
+[workspace]
+resolver = "2"
+members = [
+    "src-tauri",          # Tauri 外壳（桌面与移动端共用）
+    "crates/reader-core", # 与 UI 框架完全解耦的内核
+]
+
+# ── 发布档优化（原在 src-tauri/Cargo.toml，随 workspace 化上移）────────────
+# 参考：https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
