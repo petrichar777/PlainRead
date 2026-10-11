@@ -70,6 +70,22 @@ pub struct BookSummary {
     pub chapter_count: u32,
     pub has_real_chapters: bool,
     /// Unix 毫秒；从未读过时为 `null`。
+    ///
+    /// # 为什么要写 `#[specta(type = ...)]`
+    ///
+    /// specta **默认禁止**把 `i64` 这类「BigInt 风格」的整数导出到 TypeScript：
+    /// JS 的 `number` 是 f64，超过 2^53 的整数会被 `JSON.parse` 静默截断。
+    /// 不写覆盖的话，导出会直接失败（`Specta forbids exporting BigInt-style types`），
+    /// 而绑定文件是前端编译的硬依赖 —— 等于整个前端都编不过。
+    ///
+    /// 这里显式接受 f64 语义：毫秒时间戳当前约 `1.8e12`，
+    /// 距 2^53（约 `9.0e15`）还有三个数量级的余量，映射成 `number` 是无损的。
+    ///
+    /// 之所以**逐字段**写而不是全局放行，是因为这个决定应当**在它发生的那个字段上可见**：
+    /// 将来若真的出现需要完整 64 位精度的字段（例如内容哈希），
+    /// 它会因为缺少这行覆盖而在构建期报错，被迫显式决策 ——
+    /// 而不是被一条全局规则悄悄降级成 f64。
+    #[specta(type = Option<specta_typescript::Number>)]
     pub last_read_at: Option<i64>,
 }
 

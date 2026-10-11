@@ -119,7 +119,10 @@ mod tests {
 
     #[test]
     fn theme_serializes_as_camel_case() {
-        assert_eq!(serde_json::to_string(&ThemeId::Night).unwrap(), r#""night""#);
+        assert_eq!(
+            serde_json::to_string(&ThemeId::Night).unwrap(),
+            r#""night""#
+        );
         assert_eq!(
             serde_json::to_string(&PageTurnMode::TapZones).unwrap(),
             r#""tapZones""#

@@ -2548,6 +2548,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
+name = "plainread"
+version = "0.1.0"
+dependencies = [
+ "indexmap 1.9.3",
+ "reader-core",
+ "serde",
+ "serde_json",
+ "specta",
+ "specta-typescript",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tauri-specta",
+ "tempfile",
+]
+
+[[package]]
 name = "plist"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2740,23 +2757,6 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "uuid",
-]
-
-[[package]]
-name = "plainread"
-version = "0.1.0"
-dependencies = [
- "indexmap 1.9.3",
- "reader-core",
- "serde",
- "serde_json",
- "specta",
- "specta-typescript",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tauri-specta",
- "tempfile",
 ]
 
 [[package]]

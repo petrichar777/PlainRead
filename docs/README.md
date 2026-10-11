@@ -60,5 +60,5 @@
 | 架构设计 | ✅ 已完成（Tauri 2 版） |
 | 前端技术栈 | ✅ **已确认**：React 19 + TypeScript + Vite + Tailwind CSS + shadcn/ui（见 [ADR-004](adr/ADR-004-前端技术栈选型.md)） |
 | 环境检查 | ⚠️ 桌面端就绪；**安卓端缺 SDK / NDK / cross targets**（见 [04-环境准备](04-环境准备与M0前置检查.md)） |
-| 代码 | ✅ M0 骨架已落地：Tauri 2 + React + `reader-core`，IPC 链路自检页可跑通 |
-| 下一步 | **M1 书架与导入管线** —— 真实书库、TXT 导入、书架页 |
+| 代码 | ✅ **M0 桌面端已实测通过**：Tauri 2 + React + `reader-core`；IPC 契约（tauri-specta）自动生成链路已打通 |
+| 待办 | ⬜ M0 安卓端（需先装 Android 环境）→ 然后进入 **M1 书架与导入管线** |

@@ -18,10 +18,25 @@ mod ipc;
 
 pub use error::{AppError, AppResult, ErrorCode};
 
+use std::path::{Path, PathBuf};
+
 use tauri_specta::{collect_commands, Builder};
 
 /// 生成的 TypeScript 绑定文件路径（相对于 `src-tauri/`）。
 pub const BINDINGS_PATH: &str = "../src/ipc/bindings.ts";
+
+/// 绑定文件的**绝对**路径。
+///
+/// 刻意用 `CARGO_MANIFEST_DIR` 而不是把 [`BINDINGS_PATH`] 原样交给导出器：
+/// 后者会被解释为「相对于进程当前目录」，而当前目录在 `cargo test`、
+/// `tauri dev`、IDE 里跑测试时并不一致 —— 一旦对不上，症状是
+/// 「导出报告成功，但文件出现在别处」，极难排查。
+///
+/// 这个路径只在开发期被使用（导出只在 debug 构建发生），
+/// 那时源码目录必然存在，所以取绝对路径是安全的。
+fn bindings_output_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(BINDINGS_PATH)
+}
 
 /// 构造 IPC 契约。
 ///
@@ -44,9 +59,9 @@ pub fn export_bindings() -> Result<(), Box<dyn std::error::Error>> {
         specta_typescript::Typescript::default().header(
             "// @ts-nocheck\n\
              // 本文件由 tauri-specta 从 Rust 类型自动生成，请勿手动修改。\n\
-             // 重新生成：在工程根执行 `cargo test -p plainread`，或启动 `npm run tauri dev`。\n",
+             // 重新生成：在 code/ 目录执行 `npm run gen:bindings`。\n",
         ),
-        BINDINGS_PATH,
+        bindings_output_path(),
     )?;
     Ok(())
 }
@@ -71,24 +86,29 @@ pub fn run() {
 mod tests {
     use super::*;
 
-    /// 契约同步校验。
+    /// 契约导出 + 落点校验。
     ///
-    /// 任何一次 `cargo test` 都会重新生成绑定文件。
-    /// 如果 Rust 侧改了类型却忘了提交生成产物，CI 里的 `git diff --exit-code`
-    /// 会立刻发现——这是防止契约漂移最省事的一道闸门。
+    /// # 为什么两件事必须在同一个测试里
+    ///
+    /// 它们曾经是两个独立的 `#[test]`：一个负责导出，一个负责断言文件存在。
+    /// 结果出现了「导出明明成功、断言却报文件不存在」的假失败 ——
+    /// 因为 Rust 测试默认**并行执行**，检查存在性的那个测试
+    /// 完全可能抢在写文件的测试之前跑完。测试之间靠副作用互相依赖是脆弱的，
+    /// 合并成一个自包含的测试才是对的。
+    ///
+    /// 这个测试同时是 CI 的契约同步闸门：
+    /// 它每次都会重写绑定文件，所以在 CI 里跑完 `cargo test` 之后再执行
+    /// `git diff --exit-code`，就能检出「改了 Rust 类型却忘了提交前端绑定」。
     #[test]
-    fn export_bindings_should_succeed() {
+    fn export_bindings_should_succeed_and_land_where_the_frontend_imports_it() {
         export_bindings().expect("导出 TypeScript 绑定失败");
-    }
 
-    #[test]
-    fn bindings_file_is_written_where_the_frontend_expects_it() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(BINDINGS_PATH);
+        let path = bindings_output_path();
         assert!(path.exists(), "绑定文件不存在：{}", path.display());
 
         let content = std::fs::read_to_string(&path).expect("读取绑定文件失败");
         assert!(
-            content.contains("appInfo") || content.contains("app_info"),
+            content.contains("appInfo"),
             "绑定文件里应当能找到 appInfo 命令"
         );
     }

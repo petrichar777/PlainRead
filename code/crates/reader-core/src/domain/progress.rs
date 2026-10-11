@@ -79,7 +79,10 @@ mod tests {
     fn timestamp_now_is_sane() {
         // 2020-01-01 之后（毫秒），且不为 0（0 意味着取时间失败）
         let now = Timestamp::now();
-        assert!(now.millis() > 1_577_836_800_000, "疑似系统时钟异常: {now:?}");
+        assert!(
+            now.millis() > 1_577_836_800_000,
+            "疑似系统时钟异常: {now:?}"
+        );
     }
 
     #[test]
