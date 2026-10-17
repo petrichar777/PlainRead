@@ -87,6 +87,34 @@ pub struct BookSummary {
     /// 而不是被一条全局规则悄悄降级成 f64。
     #[specta(type = Option<specta_typescript::Number>)]
     pub last_read_at: Option<i64>,
+    /// 阅读进度百分比（0–100，已读部分）；从未读过时为 `null`。
+    ///
+    /// 书架副标题「继续阅读 · x%」的数据来源（docs/05 §3.1）。
+    /// 由仓储层在 `list_books` 时 join `progress` 表算出——
+    /// M0 的自检数据没有进度，恒为 `None`。
+    #[specta(optional)]
+    pub progress_percent: Option<u32>,
+}
+
+/// 导入失败的单个文件。
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportFailure {
+    /// 失败的文件名（不含路径，展示用）。
+    pub file: String,
+    /// 面向用户的原因，应当是可读的完整句子。
+    pub reason: String,
+}
+
+/// 一批导入的汇总结果。
+///
+/// 部分成功是常态（一次拖入多个文件），所以返回「成功 + 失败」两个列表
+/// 而不是"全部成功才返回"。
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportResult {
+    pub succeeded: Vec<BookSummary>,
+    pub failed: Vec<ImportFailure>,
 }
 
 /// 主题。
@@ -133,6 +161,58 @@ impl EchoReply {
             byte_length,
         }
     }
+}
+
+/// 章节目录项（不含正文）。
+///
+/// 正文永远不进目录响应——`open_book` 一次给全书章节标题，
+/// 正文按章经 [`ChapterDto`] 拉取，维持"永不整书入内存"。
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ChapterMetaDto {
+    /// 章序号（0 起），与 [`ChapterDto::index`] 同一取值域。
+    pub index: u32,
+    pub title: String,
+}
+
+/// `open_book` 的返回：进书时一次拿全的会话数据。
+///
+/// docs/02 §4.2：元信息 + 章节列表 + 上次进度。
+/// （「已合并阅读设置」是 M3 接入设置表后追加的字段——加字段对 TS 是非破坏性的。）
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookSessionDto {
+    pub book: BookSummary,
+    pub chapters: Vec<ChapterMetaDto>,
+    /// 从未读过时为 `null`，前端从第 0 章开始。
+    pub progress: Option<ProgressDto>,
+}
+
+/// 阅读进度（IPC 形态）。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ProgressDto {
+    pub chapter_index: u32,
+    /// 章内**字符**偏移（不是字节偏移），锚点语义见内核 `ReadingProgress` 文档。
+    pub char_offset: u32,
+    /// Unix 毫秒。64 位整数的 TS 导出考量见 [`BookSummary::last_read_at`]。
+    #[specta(type = specta_typescript::Number)]
+    pub updated_at: i64,
+}
+
+/// `load_chapter` 的返回：整章正文。
+///
+/// # 为什么一次返回整章文本
+///
+/// 章是阅读的自然事务单元（≤ 数万字，几百 KB 级），
+/// 一次取回后翻页/滚动就是纯前端操作，零 IPC 抖动。
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ChapterDto {
+    pub index: u32,
+    pub title: String,
+    /// 规范化正文（与 `content.txt` 对应字节区间逐字符一致）。
+    pub text: String,
 }
 
 #[cfg(test)]

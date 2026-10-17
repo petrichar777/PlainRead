@@ -1,35 +1,140 @@
 @import "tailwindcss";
 
 /* ─────────────────────────────────────────────────────────────
-   设计令牌
+   设计令牌 · 简阅 Design System v1
    ─────────────────────────────────────────────────────────────
-   主题色值集中在这里，切换主题只需换一组变量值。
-   与 docs/02-架构设计.md §7.5 的约定保持一致。
+   来源：docs/05-UI设计规范系统.md §2。
+   命名约定：阅读区 --rd-*（架构 §7.5），界面骨架 --ui-*（§2.3）。
+   护栏：组件代码禁止裸色值/裸时长，一切引用这里的令牌。
+   主题切换：<html data-theme="paper" | "white" | "night">，
+   书架/目录/设置的 chrome 跟随阅读主题明暗（§2.3，不做割裂感）。
    ───────────────────────────────────────────────────────────── */
+
+/* 品牌 · 刀枪不入的两组色（§2.1） */
 :root {
-  --rd-bg: #ffffff;
-  --rd-surface: #f7f7f5;
-  --rd-border: rgba(0, 0, 0, 0.08);
-  --rd-border-strong: rgba(0, 0, 0, 0.14);
-  --rd-fg: #1a1a1a;
-  --rd-fg-muted: #6b6b6b;
-  --rd-fg-subtle: #9c9c9c;
+  --ui-primary-500: #2e6b5a; /* 黛青：主操作、选中态、进度 */
+  --ui-primary-600: #265649; /* hover / pressed */
+  --ui-primary-100: #d7eae3; /* primary 弱底 */
+  --ui-accent-500: #c2554d; /* 朱砂：仅书签/当前章点睛，大面积禁用 */
+  --ui-accent-100: #f6e3e1;
 
-  --rd-accent: #185fa5;
-  --rd-accent-soft: #e6f1fb;
-  --rd-ok: #0f6e56;
-  --rd-ok-soft: #e1f5ee;
-  --rd-danger: #a32d2d;
-  --rd-danger-soft: #fcebeb;
+  /* 状态反馈色（规范未单列，从品牌色系派生；danger 避开朱砂以免混淆） */
+  --ui-danger: #a63a32;
+  --ui-danger-soft: #f6e3e1;
 
-  --rd-radius: 14px;
+  /* 字体（§2.4）：UI 系统无衬线；正文衬线栈在 M2 由 --rd-font-family 承担 */
+  --ui-font:
+    system-ui, "Segoe UI", "Microsoft YaHei", "PingFang SC",
+    "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;
 
-  /* 安全区：刘海 / 挖孔 / 底部手势条。
-     桌面端 env() 取不到值，回退为 0。 */
+  /* 字号阶梯（§2.5） */
+  --ui-text-xs: 11px;
+  --ui-text-sm: 13px;
+  --ui-text-base: 15px;
+  --ui-text-lg: 17px;
+  --ui-text-xl: 20px;
+
+  /* 圆角（§2.6） */
+  --ui-radius-sm: 6px;
+  --ui-radius-md: 10px;
+  --ui-radius-lg: 16px;
+  --ui-radius-xl: 24px;
+  --ui-radius-book: 8px; /* 书封专用 */
+
+  /* 动效（§2.7）：动画一律只动 transform / opacity */
+  --ui-dur-fast: 120ms;
+  --ui-dur-page: 220ms;
+  --ui-dur-panel: 280ms;
+  --ui-dur-theme: 300ms;
+  --ui-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* 生成式封面（§3.1）：书名 hash 出的 6 组莫兰迪渐变，来自设计草图 */
+  --ui-cover-1: linear-gradient(150deg, #5b7a6f, #39544a);
+  --ui-cover-2: linear-gradient(150deg, #a8846b, #7c5c46);
+  --ui-cover-3: linear-gradient(150deg, #6b7fa3, #46587a);
+  --ui-cover-4: linear-gradient(150deg, #9a6b6b, #6e4545);
+  --ui-cover-5: linear-gradient(150deg, #7d8a5c, #565f3b);
+  --ui-cover-6: linear-gradient(150deg, #8a7ba0, #5c5173);
+
+  /* 主题色票（§3.4 ThemeDots）：三套主题各自的底色标识。
+     这是"每套主题的身份色"，不随当前主题联动，故放在 :root 而非主题块里 */
+  --ui-theme-dot-paper: #f5efe1;
+  --ui-theme-dot-white: #ffffff;
+  --ui-theme-dot-night: #121212;
+
+  /* 安全区：刘海 / 挖孔 / 底部手势条；桌面端 env() 取不到值，回退为 0 */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
+}
+
+/* 主题 · 纸黄（默认）：阅读器的第一印象应当是"纸"，不是"屏幕" */
+:root,
+:root[data-theme="paper"] {
+  --rd-bg: #f5efe1;
+  --rd-fg: #2f2a22;
+  --rd-muted: #8a8272;
+  --rd-line: #e4dcc8;
+  --rd-selection: rgba(194, 85, 77, 0.18);
+
+  --ui-surface: #fbf8f0; /* 页面底 */
+  --ui-surface-2: #ffffff; /* 卡片/面板 */
+  --ui-border: #e8e2d2;
+  --ui-text-1: #2b2b26;
+  --ui-text-2: #7a776d;
+
+  /* 书墙搁板（§3.1 书墙式排布）：暖纸木感，上亮下暗 */
+  --ui-plank-top: #eae1cb;
+  --ui-plank-bottom: #dcd1b5;
+}
+
+/* 主题 · 白 */
+:root[data-theme="white"] {
+  --rd-bg: #ffffff;
+  --rd-fg: #1a1a1a;
+  --rd-muted: #8a8a8a;
+  --rd-line: #ececec;
+  --rd-selection: rgba(194, 85, 77, 0.15);
+
+  --ui-surface: #fafafa;
+  --ui-surface-2: #ffffff;
+  --ui-border: #e6e6e6;
+  --ui-text-1: #232323;
+  --ui-text-2: #7a7a7a;
+
+  --ui-plank-top: #f0f0f0;
+  --ui-plank-bottom: #e2e2e2;
+}
+
+/* 主题 · 夜间：#121212 深灰非纯黑；层级用描边替代阴影（§2.6） */
+:root[data-theme="night"] {
+  --rd-bg: #121212;
+  --rd-fg: #b8b4ad;
+  --rd-muted: #6b6862;
+  --rd-line: #2a2a2a;
+  --rd-selection: rgba(194, 85, 77, 0.3);
+
+  --ui-surface: #1a1a1a;
+  --ui-surface-2: #242424;
+  --ui-border: #333333;
+  --ui-text-1: #e4e1da;
+  --ui-text-2: #8f8c85;
+
+  --ui-plank-top: #2c2c2c;
+  --ui-plank-bottom: #232323;
+}
+
+/* 层级阴影（§2.6）：夜间自动替换为描边，组件无感 */
+:root {
+  --ui-e1: 0 1px 3px rgb(0 0 0 / 0.06);
+  --ui-e2: 0 8px 24px rgb(0 0 0 / 0.12);
+  --ui-e3: 0 12px 32px rgb(0 0 0 / 0.18);
+}
+:root[data-theme="night"] {
+  --ui-e1: 0 0 0 1px var(--ui-border);
+  --ui-e2: 0 0 0 1px var(--ui-border);
+  --ui-e3: 0 0 0 1px var(--ui-border);
 }
 
 html,
@@ -40,16 +145,17 @@ body,
 
 body {
   margin: 0;
-  background: var(--rd-bg);
-  color: var(--rd-fg);
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
-    "Source Han Sans SC", sans-serif;
+  background: var(--ui-surface);
+  color: var(--ui-text-1);
+  font-family: var(--ui-font);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   /* 避免移动端下拉橡皮筋与长按选择干扰阅读器的后续手势 */
   overscroll-behavior: none;
+  /* 主题切换 crossfade（§2.7） */
+  transition:
+    background-color var(--ui-dur-theme) linear,
+    color var(--ui-dur-theme) linear;
 }
 
 /* 表格数字等宽：计数变化时不会左右抖动 */
@@ -67,9 +173,10 @@ body {
 }
 
 .rd-card {
-  background: var(--rd-bg);
-  border: 0.5px solid var(--rd-border);
-  border-radius: var(--rd-radius);
+  background: var(--ui-surface-2);
+  border: 0.5px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  box-shadow: var(--ui-e1);
 }
 
 .rd-chip {
@@ -78,8 +185,61 @@ body {
   gap: 0.375rem;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: var(--ui-text-xs);
   line-height: 1.4;
+}
+
+/* 主按钮：黛青，按压 scale(0.97) 120ms（§4 Button.primary） */
+.ui-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: var(--ui-primary-500);
+  color: #ffffff;
+  border-radius: var(--ui-radius-md);
+  font-weight: 500;
+  transition: transform var(--ui-dur-fast) var(--ui-ease);
+}
+.ui-btn-primary:hover {
+  background: var(--ui-primary-600);
+}
+.ui-btn-primary:active {
+  transform: scale(0.97);
+}
+.ui-btn-primary:disabled {
+  opacity: 0.55;
+}
+
+/* 图标按钮：44×44 触控下限（§4 / §6） */
+.ui-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--ui-radius-md);
+  color: var(--ui-text-1);
+  transition: transform var(--ui-dur-fast) var(--ui-ease);
+}
+.ui-btn-icon:active {
+  transform: scale(0.97);
+}
+
+/* 书墙搁板（§3.1 书墙式排布）：每行书立于其上的一根连续横板。
+   质感来自「上亮下暗」渐变 + 极浅落影；夜间由 --ui-e1 自动换成描边（§2.6）。
+   板是一整根（跨满容器宽），不随书截断——真实书架的搁板本来就贯通 */
+.ui-plank {
+  height: 10px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--ui-plank-top), var(--ui-plank-bottom));
+  box-shadow: var(--ui-e1);
+  margin-top: 10px;
+}
+
+/* 键盘焦点可见（§6 无障碍基线） */
+:focus-visible {
+  outline: 2px solid var(--ui-primary-500);
+  outline-offset: 2px;
 }
 
 /* 光标闪烁：仅用于"运行中"的提示点 */
@@ -96,4 +256,143 @@ body {
   .rd-pulse {
     animation: rd-pulse 1.6s ease-in-out infinite;
   }
+}
+
+/* 减弱动效：全局降级（§2.7 / §6） */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 80ms !important;
+  }
+}
+
+/* ═══ 阅读页（M2）═══
+   阅读区吃 --rd-* 阅读令牌（随 data-theme 换肤），chrome 吃 --ui-*。
+   本步（M2 第 1 步）是数据链路 + 段落渲染骨架；
+   多列分页（§7.1）在后续步骤把 .reader-scroll 换成列布局即可，段落样式不动。 */
+
+.reader-page {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--rd-bg);
+  color: var(--rd-fg);
+  /* 安全区（§2.3）：刘海/手势条由 --safe-* 承担 */
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+}
+
+.reader-status {
+  margin: auto;
+  color: var(--rd-muted);
+}
+
+.reader-status-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  padding-bottom: 2rem;
+}
+
+.reader-btn {
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--ui-radius-md);
+  color: var(--ui-text-1);
+  transition: transform var(--ui-dur-fast) var(--ui-ease);
+}
+.reader-btn:active {
+  transform: scale(0.97);
+}
+.reader-btn:disabled {
+  opacity: 0.4;
+}
+
+.reader-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem 0.25rem;
+  border-bottom: 1px solid var(--rd-line);
+}
+
+.reader-header-meta {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.reader-book-title {
+  overflow: hidden;
+  font-size: var(--ui-text-sm);
+  color: var(--rd-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.reader-position {
+  flex: none;
+  font-size: var(--ui-text-xs);
+  color: var(--rd-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 滚动容器：分页步骤会改造成 CSS 多列视口（column-fill: auto，§7.1） */
+.reader-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem 1.25rem 2rem;
+}
+
+/* 中文排版基线（docs/02 §7.2）：
+   line-break 需要 <html lang="zh-Hans">（已设）；text-spacing-trim / text-autospace
+   是较新 Chromium 的加分项，老设备退化为普通渲染，不影响可用性。
+   字号/行距的实时调节（CSS 变量驱动）随设置功能（M3）接入 --rd-font-* 令牌。 */
+.reader-content {
+  max-width: 42rem;
+  margin: 0 auto;
+  font-size: 17px;
+  line-height: 1.9;
+  text-align: justify;
+  line-break: strict;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: none;
+}
+
+.reader-chapter-title {
+  margin: 0 0 1.25rem;
+  font-size: 1.2em;
+  font-weight: 600;
+  text-align: center;
+  text-indent: 0;
+  color: var(--rd-fg);
+}
+
+.reader-content p {
+  margin: 0 0 0.5em;
+  /* 首行缩进两字（§7.2）；标题行由 .reader-chapter-title 显式关闭 */
+  text-indent: 2em;
+}
+
+.reader-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem calc(0.5rem + var(--safe-bottom));
+  border-top: 1px solid var(--rd-line);
+}
+
+.reader-chapter-name {
+  flex: 1;
+  overflow: hidden;
+  font-size: var(--ui-text-xs);
+  color: var(--rd-muted);
+  white-space: nowrap;
+  text-align: center;
+  text-overflow: ellipsis;
 }

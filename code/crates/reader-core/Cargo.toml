@@ -9,5 +9,18 @@ license = "MIT OR Apache-2.0"
 serde = { version = "1", features = ["derive"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
+# ── 编码识别与解码（docs/02 §6.2）────────────────────────────────
+# chardetng：Firefox 同源的编码探测；encoding_rs：Firefox 同源的解码实现。
+# 中文旧 TXT 的主流编码（GBK / GB18030 / Big5 / UTF-16）全覆盖。
+chardetng = "0.1"
+encoding_rs = "0.8"
+
+# ── 存储（ADR-002：redb 纯 Rust，避免 Android C 交叉编译）─────────
+redb = "2"
+# redb 的值是字节序列；postcard 是紧凑、无 schema 的 serde 二进制格式，
+# 搭配领域类型的 serde derive 直接落库（ADR-002：章节索引 blob 化）。
+postcard = { version = "1", features = ["use-std"] }
+
 [dev-dependencies]
 serde_json = "1"
+tempfile = "3"

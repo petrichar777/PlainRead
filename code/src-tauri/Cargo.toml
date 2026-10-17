@@ -63,6 +63,12 @@ tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 # ── 项目内核（与 UI 框架无关）────────────────────────────────────────
 reader-core = { path = "../crates/reader-core" }
 
+# ── 系统文件选择器（pick_and_import 用；Rust 侧直调，无需前端 capability）──
+tauri-plugin-dialog = "2"
+
+# 解析前端传来的书籍 id（BookId 的字符串形态）
+uuid = { version = "1", features = ["v4"] }
+
 # 让 `cargo test` 能跑通，也让契约校验进入 CI
 [dev-dependencies]
 tempfile = "3"

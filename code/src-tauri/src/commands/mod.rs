@@ -5,8 +5,8 @@
 //! | 模块 | 功能域 | 状态 |
 //! |---|---|---|
 //! | [`app`] | 应用信息与自检 | M0 |
-//! | `library` | 书库、导入 | M1 |
-//! | `reading` | 章节读取、进度 | M2 |
+//! | [`library`] | 书库、导入 | M1 |
+//! | [`reading`] | 章节读取、进度 | M2 |
 //! | `bookmark` | 书签 | M3 |
 //! | `settings` | 阅读设置 | M3 |
 //!
@@ -14,3 +14,5 @@
 //! 否则前端拿不到带类型的调用封装。
 
 pub mod app;
+pub mod library;
+pub mod reading;

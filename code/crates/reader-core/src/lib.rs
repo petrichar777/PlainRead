@@ -19,6 +19,7 @@
 //! 2. **进度往返**：按字符偏移定位到的页，反过来能还原出同一个字符偏移。
 
 pub mod domain;
+pub mod infra;
 
 pub use domain::*;
 

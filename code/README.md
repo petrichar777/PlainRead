@@ -130,6 +130,7 @@ CI 用 `git diff --exit-code` 就能发现「改了 Rust 类型却忘了同步�
 | `cargo clippy --workspace --all-targets -- -D warnings` | ✅ 零告警 |
 | `cargo fmt --all --check` | ✅ 干净 |
 | 契约链路 | ✅ 改动 Rust DTO 字段后重新生成绑定，前端 `tsc` 立即报错 |
+| 桌面人工验收 | ✅ **owner 实测通过**（2026-10-11）：`npm run tauri dev` 窗口正常、IPC 胶囊绿色、内核自检与中文往返符合预期 |
 
 **构建耗时（迁移前 → 迁移后）**
 
@@ -138,13 +139,14 @@ CI 用 `git diff --exit-code` 就能发现「改了 Rust 类型却忘了同步�
 | 完整工作区构建（依赖 + 测试二进制） | 39 min | **3 min 26 s**（约 11×） |
 | `cargo clippy --all-targets` | 约 35 min | **1 min 55 s** |
 
-**尚未验证**：
+**范围变更**：按 [ADR-006](../../docs/adr/ADR-006-桌面优先安卓延后.md)，
+**1.0 只交付桌面端，安卓整体延后至 1.x**——M0 以桌面侧完成为准关闭（见
+[03-里程碑与验收清单](../../docs/03-里程碑与验收清单.md)），当前进入 **M1 导入管线与书库**。
 
-- 桌面窗口本身（`npm run tauri dev` 点击按钮）—— 需要图形界面人工确认。
-- 安卓全链路（`android init` / `dev` / `build --apk` / 真机安装）—— 需要先装 Android 环境。
+**延后至 1.x**：
 
-桌面与安卓两端都跑通才算 M0 完成。安卓侧进度与安装步骤见
-[`../docs/04-环境准备与M0前置检查.md`](../docs/04-环境准备与M0前置检查.md)。
+- 安卓全链路（`android init` / `dev` / `build --apk` / 真机安装）——
+  `scripts/` 下的安卓脚本与本指南的安装步骤**原样保留**，届时直接续用。
 
 ### 搭建过程中踩到并已修复的坑（细节见 docs/04 §6）
 

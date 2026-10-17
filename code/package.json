@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "gen:bindings": "cargo test -p plainread --lib --quiet",
+    "test": "vitest run",
     "build": "npm run gen:bindings && tsc && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -33,6 +34,7 @@
     "tailwindcss": "^4",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.1",
-    "vite": "^8.0.16"
+    "vite": "^8.0.16",
+    "vitest": "^5.0.4"
   }
 }

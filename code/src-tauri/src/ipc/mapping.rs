@@ -4,9 +4,9 @@
 //! 内核改字段时，编译器会在这里报错——**这正是我们要的效果**：
 //! 改动被迫在这里被显式地审视一次，而不是无声地泄漏给前端。
 
-use reader_core::{Book, BookId, Timestamp};
+use reader_core::{Book, BookId, Chapter, ReadingProgress, Timestamp};
 
-use super::dto::BookSummary;
+use super::dto::{BookSummary, ChapterMetaDto, ProgressDto};
 
 impl From<&Book> for BookSummary {
     fn from(book: &Book) -> Self {
@@ -20,6 +20,27 @@ impl From<&Book> for BookSummary {
             chapter_count: book.chapter_count,
             has_real_chapters: book.has_real_chapters,
             last_read_at: book.last_read_at.map(Timestamp::millis),
+            // 进度 join 属于仓储层（M1 核心工作）的职责；此处自检数据没有进度。
+            progress_percent: None,
+        }
+    }
+}
+
+impl From<&Chapter> for ChapterMetaDto {
+    fn from(chapter: &Chapter) -> Self {
+        Self {
+            index: chapter.index,
+            title: chapter.title.clone(),
+        }
+    }
+}
+
+impl From<&ReadingProgress> for ProgressDto {
+    fn from(p: &ReadingProgress) -> Self {
+        Self {
+            chapter_index: p.chapter_index,
+            char_offset: p.char_offset,
+            updated_at: p.updated_at.millis(),
         }
     }
 }
