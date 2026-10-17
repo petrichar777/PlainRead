@@ -4,6 +4,7 @@ import {
   LayoutGrid,
   List,
   PenLine,
+  Search,
   Settings,
   Trash2,
   X,
@@ -12,6 +13,7 @@ import {
 import { BookCard } from "../components/BookCard";
 import { ConfirmDialog, RenameDialog } from "../components/Dialogs";
 import { EmptyState } from "../components/EmptyState";
+import { filterBooks } from "../lib/search";
 import { Toast, type ToastState } from "../components/Toast";
 import type { BookSummary } from "../ipc/bindings";
 import { commands, events } from "../ipc/bindings";
@@ -120,12 +122,18 @@ export function Shelf({
   // callback ref（元素就绪即通知 state），保证容器挂载后 Observer 能接上
   const [shelfEl, setShelfEl] = useState<HTMLDivElement | null>(null);
   const cols = useColumnCount(shelfEl);
+
+  // 搜索：纯客户端过滤（列表已在内存，无需后端参与）
+  const [query, setQuery] = useState("");
+  const filtered = useMemo(() => filterBooks(data ?? [], query), [data, query]);
+  const searchMissed = data !== null && data.length > 0 && filtered.length === 0;
+
   const rows = useMemo(() => {
-    const list = data ?? [];
+    const list = filtered;
     const out: BookSummary[][] = [];
     for (let i = 0; i < list.length; i += cols) out.push(list.slice(i, i + cols));
     return out;
-  }, [data, cols]);
+  }, [filtered, cols]);
 
   const toastSeq = useRef(0);
   const showToast = useCallback((kind: ToastState["kind"], text: string) => {
@@ -459,6 +467,40 @@ export function Shelf({
         </div>
       )}
 
+      {/* 搜索栏：客户端过滤，列表在内存里，敲下即见 */}
+      <div className="px-4 pb-1">
+        <div
+          className="mx-auto flex max-w-3xl items-center gap-2 px-3 py-2"
+          style={{
+            borderRadius: "var(--ui-radius-md)",
+            border: "0.5px solid var(--ui-border)",
+            background: "var(--ui-surface-2)",
+          }}
+        >
+          <Search size={16} strokeWidth={2} style={{ color: "var(--ui-text-2)", flex: "none" }} />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜索书名或作者"
+            aria-label="搜索书架"
+            className="min-w-0 flex-1 bg-transparent text-[14px] outline-none"
+            style={{ color: "var(--ui-text-1)" }}
+          />
+          {query !== "" && (
+            <button
+              type="button"
+              aria-label="清空搜索"
+              onClick={() => setQuery("")}
+              className="ui-btn-icon"
+              style={{ width: 28, height: 28 }}
+            >
+              <X size={14} strokeWidth={2} />
+            </button>
+          )}
+        </div>
+      </div>
+
       <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
         {!preview && loadError !== null ? (
           <ErrorState message={loadError} onRetry={() => void refresh()} />
@@ -466,6 +508,11 @@ export function Shelf({
           <SkeletonShelf />
         ) : data.length === 0 ? (
           <EmptyState onImport={handleImport} />
+        ) : searchMissed ? (
+          /* 搜索无命中：明确告诉用户"书在、词不对"，和空书架的引导区分开 */
+          <p className="mt-16 text-center text-[14px]" style={{ color: "var(--ui-text-2)" }}>
+            没有找到与「{query.trim()}」匹配的书
+          </p>
         ) : view === "grid" ? (
           /* 书墙式（§3.1，2026-10-11 owner 确认）：每行书立于一根连续搁板上，
              整体居中限宽——微信读书的空间结构，纵向滚动 */
@@ -496,7 +543,7 @@ export function Shelf({
           </div>
         ) : (
           <div className="mx-auto flex max-w-xl flex-col gap-1">
-            {data.map((book) => (
+            {filtered.map((book) => (
               <BookCard
                 key={book.id}
                 book={book}

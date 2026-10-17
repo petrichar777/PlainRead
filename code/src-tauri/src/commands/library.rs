@@ -123,7 +123,7 @@ pub fn list_books(state: tauri::State<LibraryState>) -> AppResult<Vec<BookSummar
     list_books_impl(&state)
 }
 
-fn list_books_impl(state: &LibraryState) -> AppResult<Vec<BookSummary>> {
+pub(crate) fn list_books_impl(state: &LibraryState) -> AppResult<Vec<BookSummary>> {
     let rows = state
         .library
         .list_books_with_progress()
@@ -132,13 +132,11 @@ fn list_books_impl(state: &LibraryState) -> AppResult<Vec<BookSummary>> {
         .iter()
         .map(|(book, progress)| summarize(book, *progress))
         .collect();
-    // 降序、None 沉底；同为 None 时保持稳定（read 迭代序 ≈ 加入序）
-    out.sort_by(|a, b| match (b.last_read_at, a.last_read_at) {
-        (Some(x), Some(y)) => x.cmp(&y),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => std::cmp::Ordering::Equal,
-    });
+    // 最近阅读在首位，未读沉底；同为未读时保持稳定（read 迭代序 ≈ 加入序）。
+    // ⚠️ 这里的 None 分支曾因手写比较器里 a/b 解构互换而反向——
+    // 读过的书反而沉到末尾（owner 实测发现）。sort_by_key + Reverse
+    // 让"Some > None、Some 内部降序"由 Option 的自然序一次表达，不再有手写分支。
+    out.sort_by_key(|s| std::cmp::Reverse(s.last_read_at));
     Ok(out)
 }
 

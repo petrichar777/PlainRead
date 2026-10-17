@@ -235,4 +235,24 @@ mod tests {
         let err = open_book_impl(&state, &uuid::Uuid::new_v4().to_string()).unwrap_err();
         assert!(matches!(err.code, crate::error::ErrorCode::NotFound));
     }
+
+    /// owner 实测路径的复刻：读两本书 → 回书架 → 最近读的必须排首位且副标题带进度。
+    /// 这条测试守住"阅读行为必须反映到书架"的端到端语义。
+    #[test]
+    fn reading_updates_shelf_order_and_subtitle() {
+        let (state, dir) = temp_state();
+        let a = import_sample(&state, dir.path(), "甲书.txt");
+        let b = import_sample(&state, dir.path(), "乙书.txt");
+
+        // 只读乙书到第 1 章（0 起）；甲书从未读过
+        save_progress_impl(&state, &b, 1, 0).unwrap();
+
+        let list = crate::commands::library::list_books_impl(&state).unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].id, b, "最近阅读的书必须排首位");
+        assert_eq!(list[0].progress_percent, Some(100));
+        assert!(list[0].last_read_at.is_some());
+        assert_eq!(list[1].id, a);
+        assert_eq!(list[1].progress_percent, None);
+    }
 }

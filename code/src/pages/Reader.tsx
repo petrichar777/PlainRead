@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { commands } from "../ipc/bindings";
 import type { BookSessionDto, ChapterDto } from "../ipc/bindings";
@@ -98,9 +99,17 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
 
   return (
     <div className="reader-page">
+      {/* 层级：返回（图标，44px 触控下限）是唯一的 chrome 强元素；
+          书名是标题层级；阅读进度是最弱的元信息。
+          底部导航管"章间移动"，与返回的"退出书"分属两个层级，永不混排。 */}
       <header className="reader-header">
-        <button type="button" className="reader-btn" onClick={onBack}>
-          书架
+        <button
+          type="button"
+          aria-label="返回书架"
+          className="ui-btn-icon"
+          onClick={onBack}
+        >
+          <ArrowLeft size={20} strokeWidth={2} />
         </button>
         <div className="reader-header-meta">
           <span className="reader-book-title">{session.book.title}</span>
@@ -130,6 +139,7 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
           disabled={index <= 0}
           onClick={() => setIndex((i) => (i !== null ? Math.max(0, i - 1) : i))}
         >
+          <ChevronLeft size={18} strokeWidth={2} />
           上一章
         </button>
         <span className="reader-chapter-name">{chapter?.title ?? "…"}</span>
@@ -140,6 +150,7 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
           onClick={() => setIndex((i) => (i !== null ? Math.min(total - 1, i + 1) : i))}
         >
           下一章
+          <ChevronRight size={18} strokeWidth={2} />
         </button>
       </footer>
     </div>
