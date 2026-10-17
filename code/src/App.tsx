@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Diagnostics } from "./pages/Diagnostics";
 import { Reader } from "./pages/Reader";
 import { Shelf } from "./pages/Shelf";
@@ -25,27 +26,29 @@ export default function App() {
     applyTheme(loadTheme());
   }, []);
 
+  let body: ReactNode;
   if (view.kind === "diagnostics") {
-    return (
+    body = (
       <Diagnostics
         onBack={() => setView({ kind: "shelf", preview: false })}
         onPreviewShelf={() => setView({ kind: "shelf", preview: true })}
       />
     );
-  }
-
-  if (view.kind === "reader") {
-    return (
+  } else if (view.kind === "reader") {
+    body = (
       <Reader bookId={view.bookId} onBack={() => setView({ kind: "shelf", preview: false })} />
+    );
+  } else {
+    body = (
+      <Shelf
+        preview={view.preview}
+        onExitPreview={() => setView({ kind: "shelf", preview: false })}
+        onOpenDiagnostics={() => setView({ kind: "diagnostics" })}
+        onOpenBook={(bookId) => setView({ kind: "reader", bookId })}
+      />
     );
   }
 
-  return (
-    <Shelf
-      preview={view.preview}
-      onExitPreview={() => setView({ kind: "shelf", preview: false })}
-      onOpenDiagnostics={() => setView({ kind: "diagnostics" })}
-      onOpenBook={(bookId) => setView({ kind: "reader", bookId })}
-    />
-  );
+  // 错误边界包住全部视图：任何页面崩溃都显示恢复屏，而不是整页白屏
+  return <ErrorBoundary>{body}</ErrorBoundary>;
 }

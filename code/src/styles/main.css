@@ -270,10 +270,14 @@ body {
 
 /* ═══ 阅读页（M2）═══
    阅读区吃 --rd-* 阅读令牌（随 data-theme 换肤），chrome 吃 --ui-*。
-   本步（M2 第 1 步）是数据链路 + 段落渲染骨架；
-   多列分页（§7.1）在后续步骤把 .reader-scroll 换成列布局即可，段落样式不动。 */
+   分页模型（§7.1）：stage（左右留白）→ viewport（overflow:hidden 的裁切窗）
+   → track（CSS 多列，column-fill:auto 顺序填页）→ 翻页 = track 的 translateX。 */
 
 .reader-page {
+  position: relative;
+  /* 合成层围栏：track 是 will-change 合成层，历史上 Chromium 对多列合成层
+     有过 z 序逃逸的前科——isolation 让页内所有层级在自己内部消化 */
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   height: 100dvh;
@@ -282,6 +286,48 @@ body {
   /* 安全区（§2.3）：刘海/手势条由 --safe-* 承担 */
   padding-top: var(--safe-top);
   padding-bottom: var(--safe-bottom);
+}
+
+/* 阅读设置面板：fixed + 高 z-index + DOM 末位渲染——模态级配方，
+   合成层（track 的 will-change/transform）在任何路径下都压不住它。
+   变量即时生效（§2.6），量页/建锚点由 Reader 里的 200ms 节拍合并 */
+.reader-prefs {
+  position: fixed;
+  top: calc(var(--safe-top) + 3.5rem);
+  right: 0.9rem;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 15rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--ui-radius-lg, 14px);
+  border: 0.5px solid var(--ui-border);
+  background: var(--ui-surface-1);
+  box-shadow: var(--ui-shadow-pop, 0 8px 24px rgb(0 0 0 / 0.14));
+}
+.reader-prefs-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.reader-prefs-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--ui-primary-500);
+}
+.reader-prefs-label {
+  flex: none;
+  font-size: var(--ui-text-sm);
+  color: var(--ui-text-1);
+}
+.reader-prefs-value {
+  flex: none;
+  min-width: 3.2em;
+  text-align: right;
+  font-size: var(--ui-text-xs);
+  color: var(--ui-text-2);
+  font-variant-numeric: tabular-nums;
 }
 
 .reader-status {
@@ -345,22 +391,57 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* 滚动容器：分页步骤会改造成 CSS 多列视口（column-fill: auto，§7.1） */
-.reader-scroll {
+/* 舞台：承担左右留白与点按热区；viewport 只做一件事——裁掉不在当前页的内容。
+   左右边距由 --rd-page-margin 驱动（阅读设置实时调节） */
+.reader-stage {
   flex: 1;
-  overflow-y: auto;
-  padding: 1.25rem 1.25rem 2rem;
+  min-height: 0;
+  padding: 1.25rem var(--rd-page-margin, 1.25rem) 2rem;
+}
+
+.reader-viewport {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* 多列 track：列宽 = 视口宽（JS 量好后写入），一列即一页。
+   column-fill 必须 auto——默认 balance 会把最后一页摊薄成半页。
+   will-change 提示合成器把位移走 GPU；跨章重挂载（key 变化）天然无过渡。 */
+.reader-track {
+  height: 100%;
+  column-fill: auto;
+  transform: translateX(0);
+  transition: transform var(--ui-dur-page) var(--ui-ease);
+  will-change: transform;
+}
+
+/* 跨章进入（§7.1 动效）：track 随新章内容重挂载时，从"目标位 ± 一页"滑入——
+   方向（向前/向后）由 Reader 写入 --enter-x，与章内翻页同一条视觉语言。
+   关键帧只定义 from，to 用元素常驻 transform（跳页落位发生在首帧绘制前，
+   浏览器看到的第一份样式就是终点，不会先闪章首再滑）。animation 只在
+   跨章挂载的那一次存在；章内翻页仍走 transition。 */
+@keyframes reader-enter {
+  from {
+    transform: translateX(var(--enter-x));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reader-track {
+    transition: none;
+    animation: none;
+  }
 }
 
 /* 中文排版基线（docs/02 §7.2）：
    line-break 需要 <html lang="zh-Hans">（已设）；text-spacing-trim / text-autospace
    是较新 Chromium 的加分项，老设备退化为普通渲染，不影响可用性。
-   字号/行距的实时调节（CSS 变量驱动）随设置功能（M3）接入 --rd-font-* 令牌。 */
+   字号/行距由 --rd-font-size / --rd-line-height 驱动（阅读设置实时调节）：
+   变量一变浏览器即刻重排，位置由锚点算法（字符偏移）兜住——页码会漂，句子不会。
+   列内不再限宽/居中——列本身就是页宽，限宽会让正文和列缝之间出怪洞。 */
 .reader-content {
-  max-width: 42rem;
-  margin: 0 auto;
-  font-size: 17px;
-  line-height: 1.9;
+  font-size: var(--rd-font-size, 17px);
+  line-height: var(--rd-line-height, 1.9);
   text-align: justify;
   line-break: strict;
   word-break: normal;
@@ -391,12 +472,9 @@ body {
   border-top: 1px solid var(--rd-line);
 }
 
-.reader-chapter-name {
+/* 页码指示（tabular-nums）：占中、不可点，只报告"读到第几页" */
+.reader-nav-indicator {
   flex: 1;
-  overflow: hidden;
-  font-size: var(--ui-text-xs);
-  color: var(--rd-muted);
-  white-space: nowrap;
   text-align: center;
-  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
 }
