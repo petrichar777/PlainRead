@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, List, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Bookmark, List, SlidersHorizontal } from "lucide-react";
 
 import { buildFragments, offsetToPage, pageToOffset, type AnchorFragment } from "../lib/anchor";
 import { clampPage, pageOffset, pageStride, totalPages, PAGE_GAP } from "../lib/pagination";
@@ -17,9 +17,11 @@ import {
   type ReadingPrefs,
 } from "../lib/reading-prefs";
 import { commands } from "../ipc/bindings";
-import type { BookSessionDto, ChapterDto } from "../ipc/bindings";
+import type { BookSessionDto, BookmarkDto, ChapterDto } from "../ipc/bindings";
 import { useMediaQuery } from "../lib/media-query";
+import { BookmarkPanel } from "../components/BookmarkPanel";
 import { ThemeDots } from "../components/ThemeDots";
+import { Toast, type ToastState } from "../components/Toast";
 import { TocPanel } from "../components/TocPanel";
 
 /**
@@ -47,7 +49,19 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
   // ── 阅读排版偏好（字号/行距/段距/页边距/字体）：CSS 变量驱动，localStorage 记忆 ──
   const [prefs, setPrefs] = useState<ReadingPrefs>(loadReadingPrefs);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [tocOpen, setTocOpen] = useState(false);
+  /**
+   * 右侧栏：目录与书签**互斥**（同一块 320px 位置）。
+   * null = 收起。窄屏时两者都是浮层抽屉。
+   */
+  const [side, setSide] = useState<"toc" | "bookmarks" | null>(null);
+  /** 本书全部书签（进书时一次性拉，增删就地更新，不反复打 IPC）。 */
+  const [bookmarks, setBookmarks] = useState<BookmarkDto[]>([]);
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const toastSeq = useRef(0);
+  const showToast = useCallback((kind: ToastState["kind"], text: string) => {
+    toastSeq.current += 1;
+    setToast({ kind, text, seq: toastSeq.current });
+  }, []);
   /** 顶栏 + dock 的显隐（鼠标进入顶部 80px 淡入，离开 1.2s 淡出）。 */
   const [chromeVisible, setChromeVisible] = useState(true);
   /**
@@ -90,6 +104,10 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
   const [readyKey, setReadyKey] = useState<number | null>(null);
   /** 已建切面表的布局指纹：pendingOffset 消费引发的重跑不必重建切面表。 */
   const builtKeyRef = useRef("");
+  /** 上一次观察到的视口高：高度变化不改列宽但改行数，同样要触发重排。 */
+  const lastHeightRef = useRef(0);
+  /** 上一次建表时的几何（宽×高）：任何一个变了都要重锚。 */
+  const lastGeomRef = useRef({ w: 0, h: 0 });
   /** 当章切面表（锚点算法的坐标）：state 而非 ref——量页 effect 写入、保存路径读取。 */
   const [fragments, setFragments] = useState<AnchorFragment[]>([]);
   /**
@@ -97,6 +115,15 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
    * 消费方在量页 effect 里置 null；Infinity = 落末页）。
    */
   const [pendingOffset, setPendingOffset] = useState<number | null>(null);
+
+  /**
+   * 重排节拍的去抖器：拖滑块、拖窗口都会连着触发，切面表重建必须等它停下。
+   * （浏览器自己的列重排是每帧做的，我们只负责"数页 + 建锚点"这一层。）
+   */
+  const bumpReflowSoon = useCallback((delay = 150) => {
+    if (reflowTimer.current !== null) window.clearTimeout(reflowTimer.current);
+    reflowTimer.current = window.setTimeout(() => setReflowTick((t) => t + 1), delay);
+  }, []);
 
   const changePrefs = useCallback(
     (patch: Partial<ReadingPrefs>) => {
@@ -111,10 +138,9 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
           fragments[fragments.length - 1]?.offset ??
           0,
       );
-      if (reflowTimer.current !== null) window.clearTimeout(reflowTimer.current);
-      reflowTimer.current = window.setTimeout(() => setReflowTick((t) => t + 1), 200);
+      bumpReflowSoon(200);
     },
-    [fragments],
+    [fragments, bumpReflowSoon],
   );
 
   // ── chrome（顶栏 / dock）显隐 ──
@@ -154,7 +180,7 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
   }, []);
 
   /** 面板打开期间不自动隐藏（否则设置面板会跟着顶栏一起消失）。 */
-  const chromeLocked = panelOpen || tocOpen;
+  const chromeLocked = panelOpen || side !== null;
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -175,6 +201,13 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
     pageRef.current = { index, page };
   }, [index, page]);
 
+  // Toast 3s 自动消失（§4：同时最多 1 个，后来的顶掉前一个）
+  useEffect(() => {
+    if (toast === null) return;
+    const id = window.setTimeout(() => setToast(null), 3000);
+    return () => window.clearTimeout(id);
+  }, [toast]);
+
   // 进书：先于首次 await 不得碰 setState（react-hooks/set-state-in-effect），
   // 所以重置逻辑全部放在 await 之后的分支里
   const loadSession = useCallback(async () => {
@@ -186,6 +219,10 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
       // 恢复进度的字级锚点：进书即登记，等章节渲染 + 量页后精确跳页
       const off = res.data.progress?.charOffset ?? 0;
       if (off > 0) setPendingOffset(off);
+      // 书签一次拉全：这是低频数据（一本书几十条），不值得为它再做分页/懒加载
+      const bms = await commands.listBookmarks(bookId);
+      if (bms.status === "ok") setBookmarks(bms.data);
+      else setBookmarks([]);
       setError(null);
     } catch (e) {
       setSession(null);
@@ -250,17 +287,28 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
     };
   }, [bookId, index, session]);
 
-  // 视口宽度：ResizeObserver 订阅外部系统（DOM 布局），旋转/缩放/侧栏都自动重排。
-  // 依赖 viewportEl——元素真正挂载后才 observe（早退渲染期间它是 null）
+  // 视口尺寸：ResizeObserver 订阅外部系统（DOM 布局），缩放/旋转/侧栏都自动重排。
+  // 依赖 viewportEl——元素真正挂载后才 observe（早退渲染期间它是 null）。
+  //
+  // ⚠️ 高度也要看：列宽只由宽度决定，但**每页行数由高度决定**。
+  // 只盯宽度的话，改窗口高度不会重排——页数按旧高度算，正文会被裁掉一截
+  // （M3-3 验收时实测踩到：900→760 高度变化后 4/4 纹丝不动，最后一页少 4 行）。
   useEffect(() => {
     if (viewportEl === null) return;
     const ro = new ResizeObserver((entries) => {
-      const w = Math.floor(entries[0]?.contentRect.width ?? 0);
-      if (w > 0) setPageWidth(w);
+      const box = entries[0]?.contentRect;
+      if (box === undefined || box.width <= 0) return;
+      setPageWidth((prev) =>
+        Math.abs(prev - box.width) > 0.5 ? Math.floor(box.width) : prev,
+      );
+      if (Math.abs(lastHeightRef.current - box.height) > 1) {
+        lastHeightRef.current = box.height;
+        bumpReflowSoon();
+      }
     });
     ro.observe(viewportEl);
     return () => ro.disconnect();
-  }, [viewportEl]);
+  }, [viewportEl, bumpReflowSoon]);
 
   // 量页 + 建锚点：章节内容或视口宽度变化后，重新数总页数、重建切面表。
   // DOM 布局完成后才能测量，useLayoutEffect 是这里的本职工具；
@@ -271,8 +319,39 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
     const count = totalPages(track.scrollWidth, pageWidth, PAGE_GAP);
     const chapterReady = chapter !== null && chapter.index === index;
     if (chapterReady) {
+      // 几何变了（缩放窗口 / 旋转：宽**或**高）：先按**旧**切面表算出当前页首的
+      // 字符偏移，登记成锚点，等重排节拍（150ms 去抖）后再重建切面表、落回同一句。
+      // 不做这一步，页码只会被 clamp，正文会跳到别的段落（v1 遗留 R-01）。
+      const vpH =
+        viewportEl !== null
+          ? Math.round(viewportEl.getBoundingClientRect().height)
+          : 0;
+      const geomChanged =
+        lastGeomRef.current.w > 0 &&
+        (lastGeomRef.current.w !== pageWidth ||
+          Math.abs(lastGeomRef.current.h - vpH) > 1);
+      lastGeomRef.current = { w: pageWidth, h: vpH };
+      if (
+        geomChanged &&
+        pendingOffset === null &&
+        // 切面表必须属于当前章：切章与改几何同时发生时，旧偏移对新章毫无意义
+        builtKeyRef.current.startsWith(`${chapter.index}|`)
+      ) {
+        const keep = pageToOffset(fragments, pageRef.current.page);
+        ((window as unknown as { __m3?: unknown[] }).__m3 ??= []).push({
+          step: "reanchor", geomChanged, pageW: pageWidth, vpH,
+          page: pageRef.current.page, keep, frags: fragments.length,
+          bkey: builtKeyRef.current.slice(0, 24),
+        });
+        if (keep !== null && keep > 0) {
+          setPendingOffset(keep);
+          bumpReflowSoon();
+          return;
+        }
+      }
+
       let frags = fragments;
-      const bkey = `${chapter.index}|${pageWidth}|${reflowTick}|${chapter.text.length}`;
+      const bkey = `${chapter.index}|${pageWidth}|${vpH}|${reflowTick}|${chapter.text.length}`;
       if (bkey !== builtKeyRef.current) {
         // 原点取自不位移的 viewport 左缘（track 无边距，translate=0 时与它重合），
         // 因此量测与当前页码无关，翻页不重建切面表
@@ -281,10 +360,18 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
         // 量测必须在「不位移」状态下做：track 带着 translateX 时，Range 拿到的是
         // 位移后的坐标，col 会整体平移（甚至出负列号），整张切面表的页码语义就废了。
         // 这里临时归零、量完立刻还原成 React 写的那份 inline 值，避免下次渲染丢样式。
+        // ⚠️ 除了归零位移，还必须**临时关掉 transform 过渡**：
+        // .reader-track 有 220ms 的 transition，直接把 transform 改成 0 会播放动画，
+        // 此刻读到的 Range 坐标是动画中间态——切面表的列号会整体漂移
+        // （实测出现 -3…1 的负列号，书签/字号重排因此跳页）。
         const prevTransform = track.style.transform;
+        const prevTransition = track.style.transition;
+        track.style.transition = "none";
         track.style.transform = "translateX(0px)";
+        void track.offsetWidth; // 强制应用，确保下面读到的就是归零态
         frags = buildFragments(track, origin, stride);
         track.style.transform = prevTransform;
+        track.style.transition = prevTransition;
         builtKeyRef.current = bkey;
         setFragments(frags);
       }
@@ -293,6 +380,12 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
         // 恢复进度（或回上一章末页）：按锚点精确跳页。
         // setState 发生在首帧绘制前——浏览器只见到落位后的样式，不会播放长滑
         const target = offsetToPage(frags, pendingOffset);
+        ((window as unknown as { __m3?: unknown[] }).__m3 ??= []).push({
+          step: "consume", pending: pendingOffset, target, count,
+          frags: frags.length, first: frags[0]?.offset, last: frags[frags.length-1]?.offset,
+          near: frags.filter(f => f.offset > 200 && f.offset < 500).map(f => [f.offset, f.col]).slice(0, 8),
+          cols: [frags[0]?.col, frags[Math.floor(frags.length/2)]?.col, frags[frags.length-1]?.col],
+        });
         setPendingOffset(null);
         setPage(clampPage(target, count));
       } else {
@@ -302,7 +395,16 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
       setPageCount(count);
     }
     // reflowTick：字号/行距/页边距变化后的重排节拍；pendingOffset：待跳页锚点
-  }, [chapter, index, pageWidth, viewportEl, reflowTick, pendingOffset, fragments]);
+  }, [
+    chapter,
+    index,
+    pageWidth,
+    viewportEl,
+    reflowTick,
+    pendingOffset,
+    fragments,
+    bumpReflowSoon,
+  ]);
 
   // 进度保存（防抖 500ms）：翻页/切章静置半秒后，按当前页首的
   // 字级锚点存盘。restore 跳页也会触发一次——存回同一位置，无害。
@@ -346,8 +448,11 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
     } else if (index < total - 1) {
       setEnter("next");
       setIndex(index + 1);
+    } else {
+      // M3-2：不越界、不崩溃之外，还要**说一声**——静默无反应会被当成卡住
+      showToast("info", "已经是最后一页了");
     }
-  }, [index, page, pageCount, session]);
+  }, [index, page, pageCount, session, showToast]);
 
   const goPrev = useCallback(() => {
     if (index === null) return;
@@ -358,14 +463,19 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
       setEnter("prev");
       setPendingOffset(Number.POSITIVE_INFINITY);
       setIndex(index - 1);
+    } else {
+      showToast("info", "已经是第一页了");
     }
-  }, [index, page, setPendingOffset]);
+  }, [index, page, setPendingOffset, showToast]);
 
-  /** 跳到指定章（目录 / 进度条）：不走跨章滑入动画——那是"翻一页"，不是"跳过去"。 */
-  const seekToChapter = useCallback(
-    (target: number) => {
+  /**
+   * 跳到指定位置（目录 / 进度条 / 书签）：不走跨章滑入动画——那是"翻一页"，不是"跳过去"。
+   * `offset` 是章内**字符**偏移（锚点空间），传 0 即章首。
+   */
+  const seekTo = useCallback(
+    (target: number, offset = 0) => {
       setEnter(null);
-      setPendingOffset(0);
+      setPendingOffset(offset);
       setIndex(target);
       setPage(0);
     },
@@ -377,13 +487,13 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
         e.preventDefault();
-        setTocOpen((v) => !v);
+        setSide((v) => (v === "toc" ? null : "toc"));
         revealChrome(0);
         return;
       }
       if (e.key === "Escape") {
         if (panelOpen) setPanelOpen(false);
-        else if (tocOpen) setTocOpen(false);
+        else if (side !== null) setSide(null);
         return;
       }
       if (e.key === "ArrowRight" || e.key === "PageDown") goNext();
@@ -391,7 +501,62 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [goNext, goPrev, panelOpen, tocOpen, revealChrome]);
+  }, [goNext, goPrev, panelOpen, side, revealChrome]);
+
+  /**
+   * 当前页首在**锚点空间**里的字符偏移——与 `save_progress` 用的是同一套坐标，
+   * 所以书签跳转能精确落回同一句（而不是"大概那一页"）。
+   */
+  const pageStart = pageToOffset(fragments, page) ?? 0;
+  /** 当前位置是否已有书签（同章 + 同偏移才算；差一个字符都算另一条）。 */
+  const hereBookmark = bookmarks.find(
+    (b) => b.chapterIndex === index && b.charOffset === pageStart,
+  );
+
+  const toggleBookmark = useCallback(async () => {
+    if (index === null || chapter === null) return;
+    if (hereBookmark !== undefined) {
+      const res = await commands.removeBookmark(hereBookmark.id);
+      if (res.status === "ok") {
+        setBookmarks((prev) => prev.filter((b) => b.id !== hereBookmark.id));
+        showToast("info", "已移除书签");
+      } else {
+        showToast("error", res.error.message);
+      }
+      return;
+    }
+    // 摘录取正文容器的 textContent 切片：它和 charOffset 是同一个坐标空间
+    // （含章首的编号与标题），直接用 chapter.text 会整体偏移。
+    // 第 1 页的偏移从章首元数据开始，摘录要跳过它，否则展示的是"CHAPTER 008…"。
+    const space = document.querySelector(".reader-content")?.textContent ?? "";
+    const headLen =
+      document.querySelector(".reader-chapter-head")?.textContent?.length ?? 0;
+    const from = Math.max(pageStart, headLen);
+    const excerpt = space.slice(from, from + 80);
+    const res = await commands.addBookmark(bookId, index, pageStart, excerpt);
+    if (res.status === "ok") {
+      // 后端对同位置做了幂等，这里按 id 去重即可
+      setBookmarks((prev) =>
+        prev.some((b) => b.id === res.data.id) ? prev : [...prev, res.data],
+      );
+      showToast("success", "已加书签");
+    } else {
+      showToast("error", res.error.message);
+    }
+  }, [bookId, chapter, hereBookmark, index, pageStart, showToast]);
+
+  const removeBookmark = useCallback(
+    async (bm: BookmarkDto) => {
+      const res = await commands.removeBookmark(bm.id);
+      if (res.status === "ok") {
+        setBookmarks((prev) => prev.filter((x) => x.id !== bm.id));
+        showToast("info", "已移除书签");
+      } else {
+        showToast("error", res.error.message);
+      }
+    },
+    [showToast],
+  );
 
   if (error) {
     return (
@@ -441,7 +606,7 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
       Math.max(0, Math.floor((dragPct / 100) * total)),
     );
     setDragPct(null);
-    if (target !== index) seekToChapter(target);
+    if (target !== index) seekTo(target);
   };
 
   // 点按翻页（触屏友好）：左右 1/4 屏为翻页热区，中央切换 chrome（§3.2）
@@ -494,14 +659,30 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
           <span className="reader-spacer" />
           <button
             type="button"
+            aria-label={hereBookmark !== undefined ? "移除本页书签" : "给本页加书签"}
+            title={hereBookmark !== undefined ? "移除本页书签" : "给本页加书签"}
+            aria-pressed={hereBookmark !== undefined}
+            onClick={() => void toggleBookmark()}
+            className={
+              hereBookmark !== undefined ? "reader-ico reader-ico--on" : "reader-ico"
+            }
+          >
+            <Bookmark
+              size={17}
+              strokeWidth={2}
+              fill={hereBookmark !== undefined ? "currentColor" : "none"}
+            />
+          </button>
+          <button
+            type="button"
             aria-label="目录"
-            aria-expanded={tocOpen}
+            aria-expanded={side === "toc"}
             aria-keyshortcuts="Control+B"
             onClick={() => {
-              setTocOpen((v) => !v);
+              setSide((v) => (v === "toc" ? null : "toc"));
               revealChrome(0);
             }}
-            className={tocOpen ? "reader-ico reader-ico--on" : "reader-ico"}
+            className={side === "toc" ? "reader-ico reader-ico--on" : "reader-ico"}
           >
             <List size={17} strokeWidth={2} />
           </button>
@@ -613,6 +794,22 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
               A+
             </button>
           </div>
+          <span className="ui-dock-div" aria-hidden />
+          <button
+            type="button"
+            aria-label="书签列表"
+            title="书签列表"
+            aria-expanded={side === "bookmarks"}
+            onClick={() => {
+              setSide((v) => (v === "bookmarks" ? null : "bookmarks"));
+              revealChrome(0);
+            }}
+            className={
+              side === "bookmarks" ? "reader-ico reader-ico--on" : "reader-ico"
+            }
+          >
+            <Bookmark size={16} strokeWidth={2} />
+          </button>
         </div>
 
         {/* 阅读设置：标签 52 / 控件中 / 数值右 52 等宽（§4.6） */}
@@ -673,15 +870,34 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
         )}
       </div>
 
-      {tocOpen && (
+      {side === "toc" && (
         <TocPanel
           overlay={tocOverlay}
           chapters={session.chapters}
           current={index}
-          onSelect={(i) => seekToChapter(i)}
-          onClose={() => setTocOpen(false)}
+          onSelect={(i) => {
+            seekTo(i);
+            setSide(null); // 跳转后把阅读空间还回来
+          }}
+          onClose={() => setSide(null)}
         />
       )}
+
+      {side === "bookmarks" && (
+        <BookmarkPanel
+          overlay={tocOverlay}
+          bookmarks={bookmarks}
+          currentChapter={index}
+          onSelect={(bm) => {
+            seekTo(bm.chapterIndex, bm.charOffset);
+            setSide(null);
+          }}
+          onRemove={(bm) => void removeBookmark(bm)}
+          onClose={() => setSide(null)}
+        />
+      )}
+
+      <Toast toast={toast} />
     </div>
   );
 }

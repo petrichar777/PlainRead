@@ -7,10 +7,10 @@ import { coverChar, coverPair } from "../lib/cover";
  * 几何：封面 120 + 书脊 14 = 总宽 134，与列数测量（cell = --bw + --sp）一致，
  * 因此书墙布局无需任何改动。
  *
- * 只渲染两个视觉节点：
- *   face  —— 封面（纸纹 / 柔光 / 书脊沟走背景层，顶部纸页叠层走 ::before）
- *   spine —— 书脊（三停渐变冒充弧面，1px 书脊沟由 border-left 承担）
- * 落影是 `.ui-book` 上的双层 box-shadow，不额外占节点。
+ * DOM 只留两个**承载内容**的节点（face + 卡容器）：
+ *   face  —— 封面（纸纹 / 柔光 / 书脊沟走背景层；顶部纸页叠层 = face::before）
+ *   其余装饰全部走伪元素：书脊 = .ui-book::after，底部细线 = face::after，
+ *   接触阴影 = .ui-book::before。18 本一屏因此是 6 节点/本 ≈ 108（§8 P-05）。
  *
  * `small`（26px 列表缩略）只渲染 face：这个尺寸下书脊与纸纹都会糊成噪点。
  */
@@ -48,12 +48,10 @@ export function BookCover({
 
       {!small && (
         <>
-          <div className="ui-book-spine" aria-hidden />
           {code !== undefined && <span className="ui-book-code">{code}</span>}
           <span className="ui-book-title" aria-hidden>
             {title}
           </span>
-          <span className="ui-book-rule" aria-hidden />
         </>
       )}
 

@@ -62,6 +62,9 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::reading::open_book,
             commands::reading::load_chapter,
             commands::reading::save_progress,
+            commands::reading::add_bookmark,
+            commands::reading::remove_bookmark,
+            commands::reading::list_bookmarks,
         ])
         // 事件与命令同属契约：导入进度等载荷类型的改动同样会同步到 bindings.ts
         .events(collect_events![

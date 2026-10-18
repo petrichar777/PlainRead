@@ -248,3 +248,32 @@ mod tests {
         assert_eq!(serde_json::to_string(&Theme::Night).unwrap(), r#""night""#);
     }
 }
+
+/// 一条书签（M3-1）。
+///
+/// 位置语义与进度完全一致：**章号 + 章内字符偏移**，永不存页码
+/// （页码随字号/屏宽漂移，字符偏移不随排版参数变化）。
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookmarkDto {
+    pub id: String,
+    pub chapter_index: u32,
+    pub char_offset: u32,
+    /// 位置附近的正文摘录，用于在列表里辨认"这条是哪儿"。
+    pub excerpt: String,
+    /// Unix 毫秒。64 位整数的 TS 导出考量见 [`BookSummary::last_read_at`]。
+    #[specta(type = specta_typescript::Number)]
+    pub created_at: i64,
+}
+
+impl From<&reader_core::domain::Bookmark> for BookmarkDto {
+    fn from(b: &reader_core::domain::Bookmark) -> Self {
+        Self {
+            id: b.id.as_uuid().to_string(),
+            chapter_index: b.chapter_index,
+            char_offset: b.char_offset,
+            excerpt: b.excerpt.clone(),
+            created_at: b.created_at.millis(),
+        }
+    }
+}

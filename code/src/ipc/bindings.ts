@@ -42,6 +42,9 @@ export const commands = {
 	loadChapter: (bookId: string, index: number) => typedError<ChapterDto, AppError>(__TAURI_INVOKE("load_chapter", { bookId, index })),
 	/**  保存阅读进度（前端防抖调用；同时刷新 `last_read_at`）。 */
 	saveProgress: (bookId: string, chapterIndex: number, charOffset: number) => typedError<null, AppError>(__TAURI_INVOKE("save_progress", { bookId, chapterIndex, charOffset })),
+	addBookmark: (bookId: string, chapterIndex: number, charOffset: number, excerpt: string) => typedError<BookmarkDto, AppError>(__TAURI_INVOKE("add_bookmark", { bookId, chapterIndex, charOffset, excerpt })),
+	removeBookmark: (bookmarkId: string) => typedError<boolean, AppError>(__TAURI_INVOKE("remove_bookmark", { bookmarkId })),
+	listBookmarks: (bookId: string) => typedError<BookmarkDto[], AppError>(__TAURI_INVOKE("list_bookmarks", { bookId })),
 };
 
 /** Events */
@@ -129,6 +132,22 @@ export type BookSummary = {
 	 *  M0 的自检数据没有进度，恒为 `None`。
 	 */
 	progressPercent?: number | null,
+};
+
+/**
+ *  一条书签（M3-1）。
+ * 
+ *  位置语义与进度完全一致：**章号 + 章内字符偏移**，永不存页码
+ *  （页码随字号/屏宽漂移，字符偏移不随排版参数变化）。
+ */
+export type BookmarkDto = {
+	id: string,
+	chapterIndex: number,
+	charOffset: number,
+	/**  位置附近的正文摘录，用于在列表里辨认"这条是哪儿"。 */
+	excerpt: string,
+	/**  Unix 毫秒。64 位整数的 TS 导出考量见 [`BookSummary::last_read_at`]。 */
+	createdAt: number,
 };
 
 /**

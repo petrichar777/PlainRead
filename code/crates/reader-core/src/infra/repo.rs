@@ -24,7 +24,7 @@ use std::path::Path;
 
 use redb::{Database, ReadableTable, TableDefinition};
 
-use crate::domain::{Book, BookId, Chapter, ReadingProgress};
+use crate::domain::{Book, BookId, BookmarkId, Chapter, ReadingProgress};
 
 const BOOKS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("books");
 const CHAPTERS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("chapters");
@@ -303,6 +303,69 @@ impl Library {
         }
         txn.commit().map_err(db_err)?;
         Ok(())
+    }
+
+    /// 读某本书的全部书签，按阅读位置（章号 → 章内偏移）排序。
+    ///
+    /// 走 `bm_by_book` 前缀扫描（32B = book_id ‖ bookmark_id），
+    /// 不遍历全表——书签总量会随阅读时长增长，全表扫是 O(全部书签)。
+    /// 倒排里可能有孤儿（实体已删但倒排残留）：读不到实体就顺手清掉，自我修复。
+    pub fn list_bookmarks(&self, book_id: BookId) -> Result<Vec<crate::domain::Bookmark>, StoreError> {
+        let txn = self.db.begin_read().map_err(db_err)?;
+        let bookmarks = txn.open_table(BOOKMARKS).map_err(db_err)?;
+        let bm_by_book = txn.open_table(BM_BY_BOOK).map_err(db_err)?;
+
+        let prefix = key_of(book_id);
+        let mut out = Vec::new();
+        for row in bm_by_book.iter().map_err(db_err)? {
+            let (k, _) = row.map_err(db_err)?;
+            let key = k.value();
+            if key.len() != 32 || &key[..16] != prefix.as_slice() {
+                continue;
+            }
+            let Some(bytes) = bookmarks.get(&key[16..32]).map_err(db_err)? else {
+                continue;
+            };
+            let value_bytes = bytes.value();
+            if let Ok(b) = postcard::from_bytes::<crate::domain::Bookmark>(value_bytes) {
+                out.push(b);
+            }
+        }
+        out.sort_by_key(|b| (b.chapter_index, b.char_offset));
+        Ok(out)
+    }
+
+    /// 删除一条书签（实体 + 倒排）。**幂等**：不存在也返回 Ok。
+    ///
+    /// 返回是否真的删掉了实体——前端据此决定提示语，但重复点击不应报错。
+    pub fn remove_bookmark(&self, id: BookmarkId) -> Result<bool, StoreError> {
+        let bk_key = *id.as_uuid().as_bytes();
+        let txn = self.db.begin_write().map_err(db_err)?;
+        let mut removed = false;
+        {
+            let mut bookmarks = txn.open_table(BOOKMARKS).map_err(db_err)?;
+            let mut bm_by_book = txn.open_table(BM_BY_BOOK).map_err(db_err)?;
+            // 先读出 book_id 才能定位倒排键：书签实体里存着它
+            let book_id = match bookmarks.get(bk_key.as_slice()).map_err(db_err)? {
+                Some(v) => {
+                    let bytes = v.value();
+                    postcard::from_bytes::<crate::domain::Bookmark>(bytes)
+                        .ok()
+                        .map(|b| b.book_id)
+                }
+                None => None,
+            };
+            if bookmarks.remove(bk_key.as_slice()).map_err(db_err)?.is_some() {
+                removed = true;
+            }
+            if let Some(bid) = book_id {
+                let mut composite = key_of(bid).to_vec();
+                composite.extend_from_slice(&bk_key);
+                let _ = bm_by_book.remove(composite.as_slice());
+            }
+        }
+        txn.commit().map_err(db_err)?;
+        Ok(removed)
     }
 
     /// 保存书签（M3 启用，表结构与倒排在这里一并落地）。

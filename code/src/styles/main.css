@@ -541,20 +541,23 @@ body {
 }
 
 /* 书脊：竖直窄条 + 1px 书脊沟 + 三停渐变（暗–亮–暗）冒充弧面。
-   v1 的 skewY 斜切会让顶部与封面错开，这道折角缺口是新方案首先要消灭的东西 */
-.ui-book-spine {
-  position: relative;
+   v1 的 skewY 斜切会让顶部与封面错开，这道折角缺口是新方案首先要消灭的东西。
+   用 .ui-book::after 而不是独立 div：每本书省一个节点（§8 P-05 的 DOM 预算），
+   视觉完全等价——封面宽 120、总宽 134，right:0 恰好落在书脊位上。
+   书脊顶上是装订布不是纸页切边，所以这里**不**画条纹。 */
+.ui-book::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
   width: var(--sp);
-  flex: none;
   border-left: 1px solid var(--ui-book-groove);
   border-radius: 0 2px 2px 0;
   background-color: var(--book-b);
   background-image: var(--ui-book-arc);
   box-shadow: inset -1px 0 0 var(--ui-book-groove);
-}
-.ui-book-spine::before {
-  /* 书脊顶上是装订布，不是纸页切边——这里画条纹会读成"磨损"，故意留空 */
-  content: none;
+  pointer-events: none;
 }
 
 /* 档案编号：封面顶缘居中（宽度按封面宽算，不跟着书脊偏） */
@@ -590,11 +593,14 @@ body {
   overflow: hidden;
 }
 
-/* 底部细线：把书名区与书脚分开，档案感来源之一 */
-.ui-book-rule {
+/* 底部细线：把书名区与书脚分开，档案感来源之一。
+   落在 face::after 上（线本来就完全在封面矩形内），省一个节点 */
+.ui-book-face::after {
+  content: "";
   position: absolute;
   left: 14px;
-  right: 26px;
+  /* 26 = 距"书脊外缘"26px；face 只到封面右缘，所以这里减掉书脊宽（14） */
+  right: calc(26px - var(--sp));
   bottom: 15px;
   z-index: 4;
   height: 1px;
@@ -1558,7 +1564,7 @@ body {
 
    结构（v2）：
      .reader-page  ├─ .reader-main（体）  ← 顶栏 / 正文 / 页码 / dock 都在这里
-                   └─ .ui-toc（可开合）  ← 320px 右栏，Ctrl+B
+                   └─ .ui-side（目录/书签，可开合）  ← 320px 右栏，Ctrl+B
    顶栏与 dock 是**浮层**（absolute），不再占布局高度——
    这样正文列高不随 chrome 显隐变化，翻页页数不会跳。 */
 
@@ -1988,8 +1994,8 @@ body {
   opacity: 0.4;
 }
 
-/* ── 目录右栏（§4.6）：320px，当前章三重信号 ─────────────────── */
-.ui-toc {
+/* ── 右侧栏外壳（§4.6）：目录与书签共用同一套 320px 容器 ─────────── */
+.ui-side {
   display: flex;
   width: 320px;
   flex: none;
@@ -1997,7 +2003,7 @@ body {
   border-left: 1px solid var(--rd-line);
   background: var(--ui-surface-2);
 }
-.ui-toc-head {
+.ui-side-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -2005,13 +2011,13 @@ body {
   padding: 17px 16px 13px;
   border-bottom: 1px solid var(--rd-line);
 }
-.ui-toc-title {
+.ui-side-title {
   font-size: 14.5px;
   font-weight: 700;
   letter-spacing: -0.2px;
   color: var(--rd-fg);
 }
-.ui-toc-kicker {
+.ui-side-kicker {
   display: block;
   margin-top: 5px;
   font-family: var(--ui-font-mono);
@@ -2019,7 +2025,7 @@ body {
   letter-spacing: 1.05px;
   color: var(--rd-muted);
 }
-.ui-toc-list {
+.ui-side-list {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
@@ -2076,8 +2082,85 @@ body {
   color: var(--ui-accent-500);
 }
 
+/* 书签条目（M3-1）：整行跳转 + 右侧独立删除键（button 不能套 button） */
+.ui-bm-row {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  border-radius: var(--ui-radius-sm);
+  transition: background-color var(--ui-dur-fast) var(--ui-ease);
+}
+.ui-bm-row:hover {
+  background: var(--ui-hover);
+}
+.ui-bm-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 8px;
+  text-align: left;
+}
+/* 就在当前章的条目：朱砂左条，与目录的"当前章"同一套语言 */
+.ui-bm-main--here {
+  box-shadow: inset 2px 0 0 var(--ui-accent-500);
+  padding-left: 12px;
+}
+.ui-bm-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--rd-fg);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.ui-bm-main--here .ui-bm-excerpt {
+  font-weight: 600;
+}
+.ui-bm-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--ui-font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.5px;
+  color: var(--rd-muted);
+}
+.ui-bm-meta i {
+  font-style: normal;
+  opacity: 0.6;
+}
+.ui-bm-del {
+  display: grid;
+  width: 30px;
+  flex: none;
+  place-items: center;
+  color: var(--rd-muted);
+  border-radius: var(--ui-radius-sm);
+  opacity: 0.45;
+  transition:
+    opacity var(--ui-dur-fast) var(--ui-ease),
+    color var(--ui-dur-fast) var(--ui-ease);
+}
+.ui-bm-row:hover .ui-bm-del,
+.ui-bm-del:focus-visible {
+  opacity: 1;
+}
+.ui-bm-del:hover {
+  color: var(--ui-danger);
+}
+.ui-bm-empty {
+  padding: 20px 12px;
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--rd-muted);
+  text-align: center;
+}
+
 /* 浮层抽屉：放不下 320 + 620 时用（正文列宽保持不变，避免分栏重排） */
-.ui-toc--overlay {
+.ui-side--overlay {
   position: absolute;
   inset: 0 0 0 auto;
   z-index: 40;
@@ -2086,7 +2169,7 @@ body {
 
 /* 窄屏：目录改成占满整宽（骨架差异，令牌同源） */
 @media (max-width: 720px) {
-  .ui-toc {
+  .ui-side {
     position: absolute;
     inset: 0;
     z-index: 40;

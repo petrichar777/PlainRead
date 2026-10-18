@@ -59,13 +59,13 @@ export function TocPanel({
 
   return (
     <aside
-      className={overlay ? "ui-toc ui-toc--overlay" : "ui-toc"}
+      className={overlay ? "ui-side ui-side--overlay" : "ui-side"}
       aria-label="目录"
     >
-      <div className="ui-toc-head">
+      <div className="ui-side-head">
         <div>
-          <p className="ui-toc-title">目录</p>
-          <span className="ui-toc-kicker">CONTENTS · {chapters.length} CH.</span>
+          <p className="ui-side-title">目录</p>
+          <span className="ui-side-kicker">CONTENTS · {chapters.length} CH.</span>
         </div>
         <button
           type="button"
@@ -79,7 +79,7 @@ export function TocPanel({
 
       <div
         ref={listRef}
-        className="ui-toc-list"
+        className="ui-side-list"
         onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       >
         {/* 上方占位：让滚动条长度与全量数据一致 */}
