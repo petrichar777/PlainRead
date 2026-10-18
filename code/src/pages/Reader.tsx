@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, List, SlidersHorizontal } from "lucide-react";
 
 import { buildFragments, offsetToPage, pageToOffset, type AnchorFragment } from "../lib/anchor";
 import { clampPage, pageOffset, pageStride, totalPages, PAGE_GAP } from "../lib/pagination";
@@ -18,9 +18,12 @@ import {
 } from "../lib/reading-prefs";
 import { commands } from "../ipc/bindings";
 import type { BookSessionDto, ChapterDto } from "../ipc/bindings";
+import { useMediaQuery } from "../lib/media-query";
+import { ThemeDots } from "../components/ThemeDots";
+import { TocPanel } from "../components/TocPanel";
 
 /**
- * 阅读页（M2 第 2 步：CSS 多列分页，docs/02 §7.1）。
+ * 阅读页（M2 第 2 步：CSS 多列分页，docs/02 §7.1；v2 版式见 docs/06 §4.6）。
  *
  * 分页模型：viewport（overflow:hidden）内一条 track 用
  * `column-width = 视口宽` + `column-fill: auto` 把内容排成一页页的列，
@@ -29,8 +32,10 @@ import type { BookSessionDto, ChapterDto } from "../ipc/bindings";
  *
  * 进度锚点（§5.1）：存"章 + 章内字符偏移"，恢复时按锚点精确跳页——
  * 页码随字号/屏宽漂移，字符偏移不随排版参数变化，所以锚点永不存页码。
- * 字号/行距/页边距实时调节（--rd-font-* CSS 变量）+ 重排后锚点归位，
- * 防抖 500ms 存进度，切后台/关窗立即保存。
+ *
+ * v2（P3）改动只在外壳：顶栏与 dock 变浮层（不占布局高度，翻页页数不跳）、
+ * 正文列宽锁 620、页码挪到右下、新增目录右栏与 .ui-prefs 设置面板。
+ * **分页与锚点算法一行未动**。
  */
 export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void }) {
   const [session, setSession] = useState<BookSessionDto | null>(null);
@@ -39,9 +44,24 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
   /** 当前章序号；null = 还没从会话里确定起点。 */
   const [index, setIndex] = useState<number | null>(null);
 
-  // ── 阅读排版偏好（字号/行距/页边距）：CSS 变量驱动，localStorage 记忆 ──
+  // ── 阅读排版偏好（字号/行距/段距/页边距/字体）：CSS 变量驱动，localStorage 记忆 ──
   const [prefs, setPrefs] = useState<ReadingPrefs>(loadReadingPrefs);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [tocOpen, setTocOpen] = useState(false);
+  /** 顶栏 + dock 的显隐（鼠标进入顶部 80px 淡入，离开 1.2s 淡出）。 */
+  const [chromeVisible, setChromeVisible] = useState(true);
+  /**
+   * 目录在窄屏改为浮层抽屉（与手机一致）。
+   *
+   * 不只是响应式取舍：窗口放不下 620 + 320 时，右栏会把正文列挤窄，
+   * 而 Chromium 对"在已有分栏内容上改 column-width"的重排不彻底
+   * （列宽按旧值、位移按新值，表现为半列重叠）。做成浮层后正文列宽不变，
+   * 这条路径就不存在了。
+   */
+  const tocOverlay = useMediaQuery("(max-width: 1023px)");
+  const hideTimer = useRef<number | null>(null);
+  /** 拖动进度条时的临时值；null = 显示真实进度。松手才真正跳章。 */
+  const [dragPct, setDragPct] = useState<number | null>(null);
   /** 重排节拍：拖滑块时 CSS 变量即时生效（视觉无延迟），量页/建锚点 200ms 合并一次。 */
   const [reflowTick, setReflowTick] = useState(0);
   const reflowTimer = useRef<number | null>(null);
@@ -95,6 +115,59 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
       reflowTimer.current = window.setTimeout(() => setReflowTick((t) => t + 1), 200);
     },
     [fragments],
+  );
+
+  // ── chrome（顶栏 / dock）显隐 ──
+  const clearHide = useCallback(() => {
+    if (hideTimer.current !== null) {
+      window.clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+  }, []);
+
+  const scheduleHide = useCallback(
+    (delay = 1200) => {
+      clearHide();
+      hideTimer.current = window.setTimeout(() => setChromeVisible(false), delay);
+    },
+    [clearHide],
+  );
+
+  /** delay=0 表示"停在顶部热区里"，不自动隐藏。 */
+  const revealChrome = useCallback(
+    (delay = 1600) => {
+      clearHide();
+      setChromeVisible(true);
+      if (delay > 0) {
+        hideTimer.current = window.setTimeout(() => setChromeVisible(false), delay);
+      }
+    },
+    [clearHide],
+  );
+
+  // 进书先亮 1.6s：不然第一次进来的用户找不到"返回"
+  useEffect(() => {
+    hideTimer.current = window.setTimeout(() => setChromeVisible(false), 1600);
+    return () => {
+      if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
+    };
+  }, []);
+
+  /** 面板打开期间不自动隐藏（否则设置面板会跟着顶栏一起消失）。 */
+  const chromeLocked = panelOpen || tocOpen;
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (chromeLocked) return;
+      // 顶部 80px 是"呼出区"（§4.6）
+      if (e.clientY < 80) {
+        if (!chromeVisible) revealChrome(0);
+        else clearHide();
+        return;
+      }
+      if (chromeVisible && hideTimer.current === null) scheduleHide();
+    },
+    [chromeLocked, chromeVisible, clearHide, revealChrome, scheduleHide],
   );
 
   // 同步最新 index/page 到 ref（放在声明之后——deps 数组是立即求值的）
@@ -205,7 +278,13 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
         // 因此量测与当前页码无关，翻页不重建切面表
         const stride = pageStride(pageWidth, PAGE_GAP);
         const origin = viewportEl !== null ? viewportEl.getBoundingClientRect().left : 0;
+        // 量测必须在「不位移」状态下做：track 带着 translateX 时，Range 拿到的是
+        // 位移后的坐标，col 会整体平移（甚至出负列号），整张切面表的页码语义就废了。
+        // 这里临时归零、量完立刻还原成 React 写的那份 inline 值，避免下次渲染丢样式。
+        const prevTransform = track.style.transform;
+        track.style.transform = "translateX(0px)";
         frags = buildFragments(track, origin, stride);
+        track.style.transform = prevTransform;
         builtKeyRef.current = bkey;
         setFragments(frags);
       }
@@ -282,15 +361,37 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
     }
   }, [index, page, setPendingOffset]);
 
-  // 键盘翻页（桌面）
+  /** 跳到指定章（目录 / 进度条）：不走跨章滑入动画——那是"翻一页"，不是"跳过去"。 */
+  const seekToChapter = useCallback(
+    (target: number) => {
+      setEnter(null);
+      setPendingOffset(0);
+      setIndex(target);
+      setPage(0);
+    },
+    [setPendingOffset],
+  );
+
+  // 键盘（桌面）：翻页 + Ctrl+B 目录 + Esc 逐级回退
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        setTocOpen((v) => !v);
+        revealChrome(0);
+        return;
+      }
+      if (e.key === "Escape") {
+        if (panelOpen) setPanelOpen(false);
+        else if (tocOpen) setTocOpen(false);
+        return;
+      }
       if (e.key === "ArrowRight" || e.key === "PageDown") goNext();
       if (e.key === "ArrowLeft" || e.key === "PageUp") goPrev();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [goNext, goPrev]);
+  }, [goNext, goPrev, panelOpen, tocOpen, revealChrome]);
 
   if (error) {
     return (
@@ -323,139 +424,263 @@ export function Reader({ bookId, onBack }: { bookId: string; onBack: () => void 
   const paragraphs =
     chapter !== null ? chapter.text.split("\n").filter((line) => line.trim() !== "") : [];
 
-  // 点按翻页（触屏友好）：左右 1/4 屏为翻页热区，中间留给选择/菜单
+  // 全书进度：章位置 + 章内页位置（只用于进度条读数，不参与任何位置计算）
+  const overallPct =
+    total > 0
+      ? Math.min(
+          100,
+          ((index + (pageCount > 0 ? (page + 1) / pageCount : 0)) / total) * 100,
+        )
+      : 0;
+  const shownPct = dragPct ?? overallPct;
+
+  const commitSeek = () => {
+    if (dragPct === null) return;
+    const target = Math.min(
+      total - 1,
+      Math.max(0, Math.floor((dragPct / 100) * total)),
+    );
+    setDragPct(null);
+    if (target !== index) seekToChapter(target);
+  };
+
+  // 点按翻页（触屏友好）：左右 1/4 屏为翻页热区，中央切换 chrome（§3.2）
   const onViewportClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!chapterReady) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
-    if (x < 0.25) goPrev();
-    else if (x > 0.75) goNext();
+    if (x < 0.25) {
+      goPrev();
+    } else if (x > 0.75) {
+      goNext();
+    } else if (chromeVisible) {
+      clearHide();
+      setChromeVisible(false);
+    } else {
+      revealChrome(2500);
+    }
   };
+
+  const stepFont = (delta: number) => {
+    const { min, max } = PREFS_LIMITS.fontSize;
+    changePrefs({
+      fontSize: Math.min(max, Math.max(min, prefs.fontSize + delta)),
+    });
+  };
+
+  /** 滑杆的已填充部分：原生 track 画不出来，用 input 自身的背景渐变充当。 */
+  const sliderFill = (pct: number, fill: string) =>
+    ({
+      backgroundImage: `linear-gradient(to right, ${fill} ${pct}%, var(--ui-border) ${pct}%)`,
+    }) as React.CSSProperties;
 
   return (
     <div className="reader-page" style={prefsToCssVars(prefs) as React.CSSProperties}>
-      {/* 层级：返回（图标，44px 触控下限）是唯一的 chrome 强元素；
-          书名是标题层级；章序是最弱的元信息。
-          底部导航管"页间/章间移动"，与返回的"退出书"分属两个层级，永不混排。 */}
-      <header className="reader-header">
-        <button
-          type="button"
-          aria-label="返回书架"
-          className="ui-btn-icon"
-          onClick={onBack}
-        >
-          <ArrowLeft size={20} strokeWidth={2} />
-        </button>
-        <div className="reader-header-meta">
-          <span className="reader-book-title">{session.book.title}</span>
-          <span className="reader-position">
-            {index + 1} / {total} 章
-          </span>
-        </div>
-        <button
-          type="button"
-          aria-label="阅读设置"
-          aria-expanded={panelOpen}
-          className="ui-btn-icon"
-          onClick={() => setPanelOpen((v) => !v)}
-        >
-          <SlidersHorizontal size={20} strokeWidth={2} />
-        </button>
-      </header>
-
-      {/* CSS 多列视口（§7.1）：column-fill 必须 auto（顺序填页），transform 位移翻页 */}
-      <main
-        className="reader-stage"
-        onClick={onViewportClick}
-        aria-live="polite"
-        aria-label={`第 ${page + 1} 页，共 ${pageCount} 页`}
-      >
-        <div className="reader-viewport" ref={setViewportEl}>
-          <div
-            key={`ch-${readyKey ?? "boot"}`}
-            ref={trackRef}
-            className="reader-track"
-            style={
-              {
-                columnWidth: pageWidth > 0 ? `${pageWidth}px` : undefined,
-                columnGap: `${PAGE_GAP}px`,
-                transform: `translateX(${pageOffset(page, pageWidth, PAGE_GAP)}px)`,
-                visibility: pageWidth > 0 ? undefined : "hidden",
-                // 跨章进入：从邻页（目标位 ± 一页）滑入。切章加载期间旧章仍在显示，
-                // 此样式随新章内容一起到达；章内翻页不受影响（走 transition）
-                ...(enter !== null && pageWidth > 0
-                  ? {
-                      animation: "reader-enter var(--ui-dur-panel) var(--ui-ease)",
-                      "--enter-x": `${
-                        pageOffset(page, pageWidth, PAGE_GAP) +
-                        (enter === "next" ? 1 : -1) * (pageWidth + PAGE_GAP)
-                      }px`,
-                    }
-                  : {}),
-              } as React.CSSProperties
-            }
+      <div className="reader-main" onPointerMove={handlePointerMove}>
+        {/* 顶栏：绝对定位浮层，不占布局高度（正文列高恒定 ← 翻页页数不跳） */}
+        <header className={chromeVisible ? "reader-top" : "reader-top reader-top--hidden"}>
+          <button
+            type="button"
+            aria-label="返回书架"
+            className="reader-ico"
+            onClick={onBack}
           >
-            {chapter !== null && (
-              <article className="reader-content">
-                <h2 className="reader-chapter-title">{chapter.title}</h2>
-                {paragraphs.map((text, i) => (
-                  <p key={i}>{text}</p>
-                ))}
-              </article>
-            )}
+            <ArrowLeft size={17} strokeWidth={2} />
+          </button>
+          <span className="reader-top-title">{session.book.title}</span>
+          <span className="reader-top-meta">
+            CH.{index + 1} / {total}
+          </span>
+          <span className="reader-spacer" />
+          <button
+            type="button"
+            aria-label="目录"
+            aria-expanded={tocOpen}
+            aria-keyshortcuts="Control+B"
+            onClick={() => {
+              setTocOpen((v) => !v);
+              revealChrome(0);
+            }}
+            className={tocOpen ? "reader-ico reader-ico--on" : "reader-ico"}
+          >
+            <List size={17} strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            aria-label="排版设置"
+            aria-expanded={panelOpen}
+            onClick={() => {
+              setPanelOpen((v) => !v);
+              revealChrome(0);
+            }}
+            className={panelOpen ? "reader-ico reader-ico--on" : "reader-ico"}
+          >
+            <SlidersHorizontal size={17} strokeWidth={2} />
+          </button>
+        </header>
+
+        {/* CSS 多列视口（§7.1）：column-fill 必须 auto（顺序填页），transform 位移翻页 */}
+        <main
+          className="reader-stage"
+          onClick={onViewportClick}
+          aria-live="polite"
+          aria-label={`第 ${page + 1} 页，共 ${pageCount} 页`}
+        >
+          <div className="reader-viewport" ref={setViewportEl}>
+            <div
+              key={`ch-${readyKey ?? "boot"}`}
+              ref={trackRef}
+              className="reader-track"
+              style={
+                {
+                  columnWidth: pageWidth > 0 ? `${pageWidth}px` : undefined,
+                  columnGap: `${PAGE_GAP}px`,
+                  transform: `translateX(${pageOffset(page, pageWidth, PAGE_GAP)}px)`,
+                  visibility: pageWidth > 0 ? undefined : "hidden",
+                  // 跨章进入：从邻页（目标位 ± 一页）滑入。切章加载期间旧章仍在显示，
+                  // 此样式随新章内容一起到达；章内翻页不受影响（走 transition）
+                  ...(enter !== null && pageWidth > 0
+                    ? {
+                        animation: "reader-enter var(--ui-dur-panel) var(--ui-ease)",
+                        "--enter-x": `${
+                          pageOffset(page, pageWidth, PAGE_GAP) +
+                          (enter === "next" ? 1 : -1) * (pageWidth + PAGE_GAP)
+                        }px`,
+                      }
+                    : {}),
+                } as React.CSSProperties
+              }
+            >
+              {chapter !== null && (
+                <article className="reader-content">
+                  <header className="reader-chapter-head">
+                    <span className="reader-chapter-kicker">
+                      CHAPTER {String(index + 1).padStart(3, "0")}
+                    </span>
+                    <h2 className="reader-chapter-title">{chapter.title}</h2>
+                    <i className="reader-chapter-rule" aria-hidden />
+                  </header>
+                  {paragraphs.map((text, i) => (
+                    <p key={i}>{text}</p>
+                  ))}
+                </article>
+              )}
+            </div>
+          </div>
+        </main>
+
+        {/* 页码：右下角，属"排版"不属于"UI"，始终可见 */}
+        <div className="reader-pageno">
+          {page + 1} / {pageCount}
+        </div>
+
+        {/* 底部工具条：进度 / 主题 / 字号（书签按钮待 IPC 契约落地后再加） */}
+        <div className={chromeVisible ? "ui-dock" : "ui-dock ui-dock--hidden"}>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={Math.round(shownPct)}
+            aria-label="全书进度"
+            className="ui-slider"
+            style={sliderFill(shownPct, "var(--ui-accent-500)")}
+            onChange={(e) => setDragPct(Number(e.target.value))}
+            onPointerUp={commitSeek}
+            onKeyUp={commitSeek}
+            onBlur={commitSeek}
+          />
+          <span className="ui-dock-count">{Math.round(shownPct)}%</span>
+          <span className="ui-dock-div" aria-hidden />
+          <ThemeDots compact />
+          <span className="ui-dock-div" aria-hidden />
+          <div className="ui-dock-aa">
+            <button
+              type="button"
+              aria-label="减小字号"
+              disabled={prefs.fontSize <= PREFS_LIMITS.fontSize.min}
+              onClick={() => stepFont(-1)}
+            >
+              A−
+            </button>
+            <span className="v">{prefs.fontSize}</span>
+            <button
+              type="button"
+              aria-label="增大字号"
+              disabled={prefs.fontSize >= PREFS_LIMITS.fontSize.max}
+              onClick={() => stepFont(1)}
+            >
+              A+
+            </button>
           </div>
         </div>
-      </main>
 
-      <footer className="reader-nav">
-        <button
-          type="button"
-          className="reader-btn"
-          disabled={index <= 0 && page <= 0}
-          onClick={goPrev}
-        >
-          <ChevronLeft size={18} strokeWidth={2} />
-          上一页
-        </button>
-        <span className="reader-position reader-nav-indicator">
-          {`${page + 1} / ${pageCount}`}
-        </span>
-        <button
-          type="button"
-          className="reader-btn"
-          disabled={index >= total - 1 && page >= pageCount - 1}
-          onClick={goNext}
-        >
-          下一页
-          <ChevronRight size={18} strokeWidth={2} />
-        </button>
-      </footer>
+        {/* 阅读设置：标签 52 / 控件中 / 数值右 52 等宽（§4.6） */}
+        {panelOpen && (
+          <div className="ui-prefs" role="group" aria-label="阅读排版设置">
+            {(
+              [
+                ["字号", "fontSize", `${prefs.fontSize}px`, PREFS_LIMITS.fontSize],
+                ["行距", "lineHeight", prefs.lineHeight.toFixed(2), PREFS_LIMITS.lineHeight],
+                ["段距", "paraSpacing", prefs.paraSpacing.toFixed(2), PREFS_LIMITS.paraSpacing],
+                ["页边距", "margin", `${prefs.margin}px`, PREFS_LIMITS.margin],
+              ] as const
+            ).map(([label, key, display, limit]) => {
+              const pct =
+                ((prefs[key] - limit.min) / (limit.max - limit.min)) * 100;
+              return (
+                <label key={key} className="ui-prefs-row">
+                  <span className="ui-prefs-label">{label}</span>
+                  <span className="ui-prefs-ctl">
+                    <input
+                      type="range"
+                      className="ui-slider"
+                      min={limit.min}
+                      max={limit.max}
+                      step={limit.step}
+                      value={prefs[key]}
+                      style={sliderFill(pct, "var(--ui-ink)")}
+                      onChange={(e) => changePrefs({ [key]: Number(e.target.value) })}
+                    />
+                  </span>
+                  <span className="ui-prefs-value">{display}</span>
+                </label>
+              );
+            })}
+            <div className="ui-prefs-row">
+              <span className="ui-prefs-label">字体</span>
+              <span className="ui-prefs-seg">
+                <button
+                  type="button"
+                  aria-pressed={prefs.fontFamily === "serif"}
+                  onClick={() => changePrefs({ fontFamily: "serif" })}
+                >
+                  衬线
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={prefs.fontFamily === "sans"}
+                  onClick={() => changePrefs({ fontFamily: "sans" })}
+                >
+                  黑体
+                </button>
+              </span>
+              <span className="ui-prefs-value">
+                {prefs.fontFamily === "serif" ? "SERIF" : "SANS"}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
 
-      {/* 阅读设置面板：DOM 末位 + fixed + z-60（模态级配方）——
-          字号/行距/页边距。CSS 变量即时生效，200ms 后量页重建锚点 */}
-      {panelOpen && (
-        <div className="reader-prefs" role="group" aria-label="阅读排版设置">
-          {(
-            [
-              ["字号", "fontSize", `${prefs.fontSize}px`, PREFS_LIMITS.fontSize],
-              ["行距", "lineHeight", prefs.lineHeight.toFixed(1), PREFS_LIMITS.lineHeight],
-              ["页边距", "margin", `${prefs.margin}px`, PREFS_LIMITS.margin],
-            ] as const
-          ).map(([label, key, display, limit]) => (
-            <label key={key} className="reader-prefs-row">
-              <span className="reader-prefs-label">{label}</span>
-              <input
-                type="range"
-                min={limit.min}
-                max={limit.max}
-                step={limit.step}
-                value={prefs[key]}
-                onChange={(e) => changePrefs({ [key]: Number(e.target.value) })}
-              />
-              <span className="reader-prefs-value">{display}</span>
-            </label>
-          ))}
-        </div>
+      {tocOpen && (
+        <TocPanel
+          overlay={tocOverlay}
+          chapters={session.chapters}
+          current={index}
+          onSelect={(i) => seekToChapter(i)}
+          onClose={() => setTocOpen(false)}
+        />
       )}
     </div>
   );

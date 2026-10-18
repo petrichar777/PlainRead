@@ -4,11 +4,19 @@ import tailwindcss from "@tailwindcss/vite";
 // @ts-expect-error type error without @types/node package
 import process from "node:process";
 
+import pkg from "./package.json";
+
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
   plugins: [react(), tailwindcss()],
+
+  // 版本号单一来源：package.json。侧栏页脚要显示它，
+  // 走 define 注入而不是在组件里抄一份字符串（抄的迟早漂移）。
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
 
   // 降级构建目标 —— 这一条是给安卓准备的。
   //

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { coverChar, coverGradient, hashTitle } from "./cover";
+import { bookCode, coverChar, coverGradient, coverPair, coverVariant, hashTitle } from "./cover";
 
 describe("hashTitle", () => {
   it("对同一书名结果稳定", () => {
@@ -29,6 +29,43 @@ describe("coverGradient", () => {
     for (const title of ["三体", "a", "很长的书名很长的书名", "Strangers"]) {
       expect(coverGradient(title)).toMatch(/^var\(--ui-cover-[1-6]\)$/);
     }
+  });
+});
+
+describe("coverVariant", () => {
+  it("落在 1–6 且与渐变组一致", () => {
+    for (const title of ["三体", "a", "剑来", "", "Strangers"]) {
+      const variant = coverVariant(title);
+      expect(variant).toBeGreaterThanOrEqual(1);
+      expect(variant).toBeLessThanOrEqual(6);
+      expect(coverGradient(title)).toBe(`var(--ui-cover-${variant})`);
+    }
+  });
+});
+
+describe("coverPair", () => {
+  it("起止色引用同一组的 -a / -b 令牌（立体书的顶面与书脊要用同一个色）", () => {
+    for (const title of ["三体", "剑来", "Strangers"]) {
+      const index = coverVariant(title);
+      expect(coverPair(title)).toEqual({
+        a: `var(--ui-cover-${index}-a)`,
+        b: `var(--ui-cover-${index}-b)`,
+      });
+    }
+  });
+});
+
+describe("bookCode", () => {
+  it("UUID 去连字符取前 6 位并大写，带 WJ- 前缀", () => {
+    expect(bookCode("0001abcd-2345-4def-8abc-0123456789ab")).toBe("WJ-0001AB");
+  });
+
+  it("不含连字符的 id 同样处理", () => {
+    expect(bookCode("abcdef12")).toBe("WJ-ABCDEF");
+  });
+
+  it("短 id 有多少取多少，不补位也不抛错", () => {
+    expect(bookCode("ab-cd")).toBe("WJ-ABCD");
   });
 });
 

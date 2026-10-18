@@ -13,15 +13,28 @@ describe("sanitizePrefs", () => {
   });
 
   it("越界收边", () => {
-    expect(sanitizePrefs({ fontSize: 100, lineHeight: 5, margin: 0 })).toEqual({
-      fontSize: 24,
+    expect(
+      sanitizePrefs({
+        fontSize: 100,
+        lineHeight: 5,
+        margin: 0,
+        paraSpacing: 9,
+      }),
+    ).toEqual({
+      fontSize: 28,
       lineHeight: 2.4,
       margin: 8,
+      paraSpacing: 1.4,
+      fontFamily: "serif",
     });
-    expect(sanitizePrefs({ fontSize: 1, lineHeight: 0.5, margin: -3 })).toEqual({
+    expect(
+      sanitizePrefs({ fontSize: 1, lineHeight: 0.5, margin: -3, paraSpacing: -1 }),
+    ).toEqual({
       fontSize: 14,
       lineHeight: 1.5,
       margin: 8,
+      paraSpacing: 0,
+      fontFamily: "serif",
     });
   });
 
@@ -30,15 +43,40 @@ describe("sanitizePrefs", () => {
     expect(sanitizePrefs({ lineHeight: "大" as unknown as number })).toEqual(DEFAULT_PREFS);
     expect(sanitizePrefs({})).toEqual(DEFAULT_PREFS);
   });
+
+  it("未知字体回默认衬线（不信任存储里的字符串）", () => {
+    expect(sanitizePrefs({ fontFamily: "comic" as never }).fontFamily).toBe("serif");
+    expect(sanitizePrefs({ fontFamily: "sans" }).fontFamily).toBe("sans");
+  });
+
+  it("旧版本存储缺 paraSpacing / fontFamily 时用默认值兜底（免迁移脚本）", () => {
+    // v1 只存了这三项
+    const legacy = { fontSize: 17, lineHeight: 1.9, margin: 20 };
+    expect(sanitizePrefs(legacy)).toEqual({
+      fontSize: 17,
+      lineHeight: 1.9,
+      margin: 20,
+      paraSpacing: DEFAULT_PREFS.paraSpacing,
+      fontFamily: DEFAULT_PREFS.fontFamily,
+    });
+  });
 });
 
 describe("prefsToCssVars", () => {
   it("映射为 --rd-* 变量（单位就位）", () => {
-    expect(prefsToCssVars({ fontSize: 19, lineHeight: 2, margin: 12 })).toEqual({
+    expect(prefsToCssVars({ ...DEFAULT_PREFS, fontSize: 19, lineHeight: 2, margin: 12 })).toEqual({
       "--rd-font-size": "19px",
       "--rd-line-height": "2",
       "--rd-page-margin": "12px",
+      "--rd-para-spacing": "0.55em",
+      "--rd-font-family": "var(--ui-font-serif)",
     });
+  });
+
+  it("黑体档映射到 UI 无衬线栈", () => {
+    expect(prefsToCssVars({ ...DEFAULT_PREFS, fontFamily: "sans" })["--rd-font-family"]).toBe(
+      "var(--ui-font)",
+    );
   });
 });
 
@@ -61,6 +99,10 @@ describe("loadReadingPrefs", () => {
       "plainread.reading-prefs",
       JSON.stringify({ fontSize: 40, margin: 99 }),
     );
-    expect(loadReadingPrefs()).toEqual({ fontSize: 24, lineHeight: 1.9, margin: 40 });
+    expect(loadReadingPrefs()).toEqual({
+      ...DEFAULT_PREFS,
+      fontSize: 28,
+      margin: 40,
+    });
   });
 });

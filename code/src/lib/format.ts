@@ -29,6 +29,24 @@ export function describeLastRead(lastReadAt: number | null, now: number): string
 }
 
 /**
+ * 由进度百分比反推「当前在第几章」的**近似值**。
+ *
+ * 为什么是近似：`BookSummary` 只有 `progressPercent`，没有章索引
+ * （docs/06 §7 数据缺口）。而后端的百分比本身就是按章节近似的
+ * （`progress_percent_is_chapter_approximation`），所以反推与它是同一口径。
+ *
+ * 用途仅限书架/侧栏的展示文案（「CH.118 / 342」），
+ * **不参与任何阅读位置计算**——真实位置永远走「章号 + 字符偏移」。
+ */
+export function approxChapter(book: BookSummary): number | null {
+  const percent = book.progressPercent ?? null;
+  if (percent === null) return null;
+  const count = Math.max(1, book.chapterCount);
+  const index = Math.round((percent / 100) * count);
+  return Math.min(count, Math.max(1, index));
+}
+
+/**
  * 书卡副标题（docs/05 §3.1）：
  * 有进度 → 「继续阅读 · x%」或「读完」；只读过但无进度记录 → 「上次阅读 · …」；否则「未读」。
  *

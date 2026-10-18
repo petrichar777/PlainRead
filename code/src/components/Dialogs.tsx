@@ -4,6 +4,9 @@ import { X } from "lucide-react";
 /**
  * 对话框（docs/05 §4 Dialog）：只用于删除书籍等**不可逆操作**，
  * 文案必须写明后果。重命名走 [`RenameDialog`]。
+ *
+ * v2 尺寸：面板圆角 6px、按钮 40px（`--ui-radius-xl` / `h-10`），
+ * 遮罩用 `--ui-scrim`，确认按钮保持 `--ui-danger`。
  */
 export function ConfirmDialog({
   open,
@@ -36,7 +39,7 @@ export function ConfirmDialog({
       <div
         role="presentation"
         className="absolute inset-0"
-        style={{ background: "rgb(0 0 0 / 0.4)" }}
+        style={{ background: "var(--ui-scrim)" }}
         onClick={onCancel}
       />
       <div
@@ -46,8 +49,8 @@ export function ConfirmDialog({
         className="relative w-full max-w-sm p-5"
         style={{
           background: "var(--ui-surface-2)",
-          borderRadius: "var(--ui-radius-lg)",
-          boxShadow: "var(--ui-e2)",
+          borderRadius: "var(--ui-radius-xl)",
+          boxShadow: "var(--ui-e-pop)",
         }}
       >
         <p
@@ -66,7 +69,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="h-11 rounded-[10px] px-4 text-[15px]"
+            className="h-10 rounded-[var(--ui-radius-md)] px-4 text-[15px]"
             style={{ color: "var(--ui-text-1)" }}
           >
             取消
@@ -74,8 +77,8 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onConfirm}
-            className="h-11 rounded-[10px] px-4 text-[15px] font-medium"
-            style={{ background: "var(--ui-danger)", color: "#ffffff" }}
+            className="h-10 rounded-[var(--ui-radius-md)] px-4 text-[15px] font-medium"
+            style={{ background: "var(--ui-danger)", color: "var(--ui-on-accent)" }}
           >
             {confirmLabel}
           </button>
@@ -128,7 +131,7 @@ export function RenameDialog({
       <div
         role="presentation"
         className="absolute inset-0"
-        style={{ background: "rgb(0 0 0 / 0.4)" }}
+        style={{ background: "var(--ui-scrim)" }}
         onClick={onCancel}
       />
       <div
@@ -138,8 +141,8 @@ export function RenameDialog({
         className="relative w-full max-w-sm p-5"
         style={{
           background: "var(--ui-surface-2)",
-          borderRadius: "var(--ui-radius-lg)",
-          boxShadow: "var(--ui-e2)",
+          borderRadius: "var(--ui-radius-xl)",
+          boxShadow: "var(--ui-e-pop)",
         }}
       >
         <div className="flex items-center justify-between">
@@ -169,10 +172,10 @@ export function RenameDialog({
           }}
           spellCheck={false}
           maxLength={100}
-          className="mt-3 h-11 w-full rounded-[10px] px-3 text-[15px] outline-none"
+          className="mt-3 h-10 w-full rounded-[var(--ui-radius-md)] px-3 text-[15px] outline-none"
           style={{
             background: "var(--ui-surface)",
-            border: "0.5px solid var(--ui-border)",
+            border: "1px solid var(--ui-border)",
             color: "var(--ui-text-1)",
           }}
         />
@@ -180,7 +183,7 @@ export function RenameDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="h-11 rounded-[10px] px-4 text-[15px]"
+            className="h-10 rounded-[var(--ui-radius-md)] px-4 text-[15px]"
             style={{ color: "var(--ui-text-1)" }}
           >
             取消
@@ -189,7 +192,7 @@ export function RenameDialog({
             type="button"
             disabled={unchanged || !trimmed}
             onClick={() => onConfirm(trimmed)}
-            className="ui-btn-primary h-11 px-4 text-[15px]"
+            className="ui-btn-primary h-10 px-4 text-[15px]"
           >
             确认
           </button>

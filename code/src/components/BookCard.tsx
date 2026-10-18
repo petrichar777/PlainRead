@@ -1,24 +1,27 @@
 import { useCallback, useRef } from "react";
+import { Check } from "lucide-react";
 
-import { bookSubtitle } from "../lib/format";
+import { bookCode } from "../lib/cover";
 import type { BookSummary } from "../ipc/bindings";
 
 import { BookCover } from "./BookCover";
 
 /**
- * 书卡（docs/05 §4 BookCard）：网格 / 列表双形态。
+ * 书卡（docs/06 §4.3）：网格 / 列表双形态。
  *
  * 交互规格：
- * - 点按 = 直接进阅读页（不经过详情页——少一层就是实用，M2 已接通）；
+ * - 点按 = 直接进阅读页（不经过详情页——少一层就是实用）；
  * - 长按 500ms（触屏）或右键（桌面）= 选中，进入多选模式；
- * - 按压 scale(0.97) 120ms。
+ * - 网格悬停 translateY(-4px) 180ms + 落影加深（见 .ui-book-card）。
+ *
+ * D3：网格态**不再有封面外的书名/副标题**——书名印在封面上。
+ * 因此 <button> 必须带 aria-label，否则读屏只剩"按钮"。
  */
 export function BookCard({
   book,
   view,
   selected,
   selectionMode,
-  now,
   onOpen,
   onSelect,
 }: {
@@ -26,7 +29,6 @@ export function BookCard({
   view: "grid" | "list";
   selected: boolean;
   selectionMode: boolean;
-  now: number;
   onOpen: (book: BookSummary) => void;
   onSelect: (book: BookSummary) => void;
 }) {
@@ -64,51 +66,53 @@ export function BookCard({
     [clearTimer],
   );
 
-  const subtitle = bookSubtitle(book, now);
-  const chapterNote = `${book.chapterCount} 章${
-    book.hasRealChapters ? "" : " · 未分章"
-  }`;
+  const code = bookCode(book.id);
+  const percent = book.progressPercent;
+  const pct = Math.min(100, Math.max(0, percent ?? 0));
 
-  const ringStyle = selected
-    ? { boxShadow: "0 0 0 2px var(--ui-primary-500)" }
-    : undefined;
+  const pressHandlers = {
+    onPointerDown: handlePointerDown,
+    onPointerUp: clearTimer,
+    onPointerLeave: clearTimer,
+    onPointerMove: handlePointerMove,
+    onPointerCancel: clearTimer,
+    onContextMenu: (e: React.MouseEvent) => {
+      e.preventDefault();
+      onSelect(book);
+    },
+    onClick: () => (selectionMode ? onSelect(book) : onOpen(book)),
+  };
 
   if (view === "list") {
     return (
       <button
         type="button"
-        onPointerDown={handlePointerDown}
-        onPointerUp={clearTimer}
-        onPointerLeave={clearTimer}
-        onPointerMove={handlePointerMove}
-        onPointerCancel={clearTimer}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          onSelect(book);
-        }}
-        onClick={() => (selectionMode ? onSelect(book) : onOpen(book))}
-        className="flex w-full items-center gap-3 rounded-xl p-2 text-left transition-transform active:scale-[0.98]"
-        style={{
-          ...ringStyle,
-          background: "var(--ui-surface-2)",
-          transitionDuration: "var(--ui-dur-fast)",
-        }}
+        {...pressHandlers}
+        aria-label={book.title}
+        aria-pressed={selectionMode ? selected : undefined}
+        className="ui-list-row"
+        style={
+          selected
+            ? { boxShadow: "inset 2px 0 0 var(--ui-accent-500)" }
+            : undefined
+        }
       >
         <BookCover title={book.title} small />
         <div className="min-w-0 flex-1">
-          <p
-            className="truncate text-[15px] font-medium"
-            style={{ color: "var(--ui-text-1)" }}
-            title={book.title}
-          >
+          <p className="ui-list-title" title={book.title}>
             {book.title}
           </p>
-          <p
-            className="mt-0.5 truncate text-[11px]"
-            style={{ color: "var(--ui-text-2)" }}
-          >
-            {subtitle} · {chapterNote}
+          <p className="ui-list-meta">
+            {code} · {book.chapterCount} CH.
           </p>
+        </div>
+        <div className="ui-list-prog">
+          <span className="ui-list-bar">
+            <i style={{ width: `${pct}%` }} />
+          </span>
+          <span className="ui-list-pct">
+            {percent === null ? "—" : `${pct}%`}
+          </span>
         </div>
       </button>
     );
@@ -117,34 +121,27 @@ export function BookCard({
   return (
     <button
       type="button"
-      onPointerDown={handlePointerDown}
-      onPointerUp={clearTimer}
-      onPointerLeave={clearTimer}
-      onPointerMove={handlePointerMove}
-      onPointerCancel={clearTimer}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        onSelect(book);
-      }}
-      onClick={() => (selectionMode ? onSelect(book) : onOpen(book))}
-      className="flex flex-col text-left transition-transform active:scale-[0.97]"
-      style={{
-        ...ringStyle,
-        borderRadius: "var(--ui-radius-md)",
-        transitionDuration: "var(--ui-dur-fast)",
-      }}
+      {...pressHandlers}
+      aria-label={book.title}
+      aria-pressed={selectionMode ? selected : undefined}
+      className="ui-book-card"
     >
-      <BookCover title={book.title} />
-      <p
-        className="mt-2 truncate text-[13px] font-medium"
-        style={{ color: "var(--ui-text-1)" }}
+      <BookCover
         title={book.title}
-      >
-        {book.title}
-      </p>
-      <p className="tnum mt-0.5 truncate text-[11px]" style={{ color: "var(--ui-text-2)" }}>
-        {subtitle}
-      </p>
+        code={code}
+        progress={percent}
+      />
+      {selectionMode && (
+        <>
+          {selected && <span className="ui-book-dim" aria-hidden />}
+          <span
+            className={selected ? "ui-book-check ui-book-check--on" : "ui-book-check"}
+            aria-hidden
+          >
+            {selected && <Check size={12} strokeWidth={3} />}
+          </span>
+        </>
+      )}
     </button>
   );
 }

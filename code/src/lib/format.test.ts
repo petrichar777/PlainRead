@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BookSummary } from "../ipc/bindings";
-import { bookSubtitle, describeLastRead } from "./format";
+import { approxChapter, bookSubtitle, describeLastRead } from "./format";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -64,5 +64,25 @@ describe("bookSubtitle", () => {
 
   it("从未读过 → 未读", () => {
     expect(bookSubtitle(book(), NOW)).toBe("未读");
+  });
+});
+
+describe("approxChapter", () => {
+  it("无进度 → null（不编造章号）", () => {
+    expect(approxChapter(book())).toBeNull();
+  });
+
+  it("按百分比反推章号，并与后端的分章近似同口径", () => {
+    expect(approxChapter(book({ progressPercent: 50, chapterCount: 100 }))).toBe(50);
+    expect(approxChapter(book({ progressPercent: 68, chapterCount: 46 }))).toBe(31);
+  });
+
+  it("夹在 1..chapterCount 之间（0% 与 100% 都不能越界）", () => {
+    expect(approxChapter(book({ progressPercent: 0, chapterCount: 12 }))).toBe(1);
+    expect(approxChapter(book({ progressPercent: 100, chapterCount: 12 }))).toBe(12);
+  });
+
+  it("chapterCount 为 0 时不产生 0 或负数", () => {
+    expect(approxChapter(book({ progressPercent: 40, chapterCount: 0 }))).toBe(1);
   });
 });

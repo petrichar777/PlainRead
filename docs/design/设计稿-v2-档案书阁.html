@@ -1,0 +1,1504 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>简阅 · 档案书阁 — UI 设计稿 v2（桌面优先）</title>
+<style>
+/* ════════════════════════════════════════════════════════════════
+   简阅 v2 · 档案书阁  Design Spec
+   参考：Wenku8_Flutter 的 archive design
+         （奶白玻璃 / 档案式排版 / 等轴测立体书架）
+   本文件是「设计稿」，不是产品实现。产品实现仍是
+   React + Tailwind + shadcn/ui，令牌落到 src/styles/main.css。
+   ════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* ── 明色 · 档案系 ── */
+  --c-canvas:#F4F3EF;      /* 页底：暖灰白，不是纯白，也不是纸黄 */
+  --c-surface:#FDFCFA;     /* 面板 / 卡片 */
+  --c-milk:#FEFDF8;        /* 奶白浮层（唯一允许的"玻璃"层） */
+  --c-ink:#1D1C19;         /* 主文字 / 主按钮底 */
+  --c-ink-2:#5F5B53;       /* 次文字   6.3:1 */
+  --c-ink-3:#8E8A81;       /* 元数据   3.4:1（只许辅助信息） */
+  --c-rule:#E3E0D8;        /* 细线 */
+  --c-rule-2:#CFCBBF;      /* 强线 / 套准标记 */
+  --c-accent:#B4472F;      /* 朱砂：当前章、书签、进度。面积 < 5% */
+  --c-accent-soft:#F1E4DE;
+  --c-wash:#EDEBE4;        /* 文档底（比 canvas 深，让稿子浮起来） */
+
+  --f-ui:system-ui,"Segoe UI","Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
+  --f-mono:ui-monospace,"Cascadia Mono","Consolas","SF Mono",monospace;
+  --f-serif:"Source Han Serif SC","Noto Serif SC",Georgia,"宋体",serif;
+
+  --r-panel:4px;
+  --r-cover:3px;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--c-wash);
+  color:var(--c-ink);
+  font-family:var(--f-ui);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4,p{margin:0}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+
+/* ── 文档壳 ─────────────────────────────────────────────── */
+.doc{max-width:1224px;margin:0 auto;padding:0 32px 140px}
+
+/* 顶部报头：档案式 masthead */
+.masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:40px;
+  padding:64px 0 22px;border-bottom:1px solid var(--c-rule-2)}
+.mast-left{display:flex;align-items:flex-start;gap:16px}
+.mast-logo{width:34px;height:38px;background:var(--c-ink);color:var(--c-milk);
+  display:grid;place-items:center;font-size:15px;font-weight:800;letter-spacing:-.8px;flex:none}
+.mast-titles{display:flex;flex-direction:column;gap:5px}
+.mast-kicker{font-family:var(--f-mono);font-size:9.5px;letter-spacing:1.05px;
+  color:var(--c-ink-3);text-transform:uppercase}
+.mast-titles h1{font-size:30px;line-height:1.14;font-weight:800;letter-spacing:-.9px}
+.mast-titles .sub{font-size:13px;line-height:1.6;color:var(--c-ink-2);max-width:52ch}
+.mast-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none;padding-bottom:3px}
+.mast-right .code{font-family:var(--f-mono);font-size:9.5px;letter-spacing:1.05px;color:var(--c-ink-3)}
+.mast-right .ver{font-family:var(--f-mono);font-size:9.5px;letter-spacing:1.05px;
+  background:var(--c-ink);color:var(--c-milk);padding:3px 6px}
+
+/* 小节导航 */
+.toc{position:sticky;top:0;z-index:20;display:flex;gap:2px;flex-wrap:wrap;
+  padding:12px 0;background:color-mix(in srgb,var(--c-wash) 92%,transparent);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--c-rule)}
+.toc a{display:flex;align-items:center;gap:7px;padding:6px 10px;font-size:12.5px;
+  color:var(--c-ink-2);text-decoration:none;border-radius:2px;transition:background .14s}
+.toc a:hover{background:var(--c-rule)}
+.toc a i{font-family:var(--f-mono);font-size:9px;font-style:normal;letter-spacing:.6px;color:var(--c-ink-3)}
+.toc a.on{background:var(--c-ink);color:var(--c-milk)}
+.toc a.on i{color:color-mix(in srgb,var(--c-milk) 60%,transparent)}
+
+/* 小节标题 */
+.sec{padding-top:72px}
+.sec-meta{display:flex;align-items:center;gap:10px}
+.sec-code{font-family:var(--f-mono);font-size:9.5px;letter-spacing:1.05px;color:var(--c-ink-3);white-space:nowrap}
+.sec-line{flex:1;height:.6px;background:var(--c-rule-2);max-width:220px}
+.sec-dot{width:3px;height:3px;background:var(--c-ink)}
+.sec h2{font-size:22px;font-weight:700;letter-spacing:-.4px;margin-top:9px}
+.sec .lead{font-size:13.5px;line-height:1.85;color:var(--c-ink-2);margin-top:9px;max-width:70ch}
+.sec .lead b{color:var(--c-ink);font-weight:600}
+
+/* 通用网格 */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media (max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+/* 说明卡 */
+.note{background:var(--c-surface);border:1px solid var(--c-rule);border-radius:var(--r-panel);padding:16px 18px}
+.note h4{font-size:13px;font-weight:700;letter-spacing:-.1px;margin-bottom:7px}
+.note p{font-size:12.5px;line-height:1.8;color:var(--c-ink-2)}
+.note ul{margin:0;padding-left:16px;font-size:12.5px;line-height:1.85;color:var(--c-ink-2)}
+.note li+li{margin-top:4px}
+
+/* 表格 */
+table.t{width:100%;border-collapse:collapse;font-size:12.5px}
+table.t th{text-align:left;font-family:var(--f-mono);font-size:9.5px;letter-spacing:1.05px;
+  color:var(--c-ink-3);font-weight:500;padding:0 12px 9px 0;border-bottom:1px solid var(--c-rule-2);text-transform:uppercase}
+table.t td{padding:10px 12px 10px 0;border-bottom:1px solid var(--c-rule);vertical-align:top;line-height:1.7;color:var(--c-ink-2)}
+table.t td:first-child{color:var(--c-ink);font-weight:500;white-space:nowrap}
+table.t code{font-family:var(--f-mono);font-size:11px;background:var(--c-rule);padding:1px 4px;border-radius:2px;color:var(--c-ink)}
+table.t .yes{color:#3F6B4A;font-weight:600}
+table.t .no{color:var(--c-accent);font-weight:600}
+
+/* ═══ 舞台 / 屏幕 ═══════════════════════════════════════════ */
+.stage{--k:.68;position:relative;width:calc(1440px * var(--k));height:calc(900px * var(--k));
+  margin:0 auto;max-width:100%}
+.stage > .screen{position:absolute;top:0;left:0;width:1440px;height:900px;
+  transform:scale(var(--k));transform-origin:0 0;
+  background:var(--c-canvas);border:1px solid var(--c-rule-2);border-radius:6px;overflow:hidden;
+  box-shadow:0 1px 2px rgb(29 28 25/.04),0 24px 60px -30px rgb(29 28 25/.28)}
+.stage.phone{--k:.74;width:calc(375px * var(--k));height:calc(812px * var(--k))}
+.stage.phone > .screen{width:375px;height:812px}
+.stage.phone > .screen{border-radius:10px}
+.stage.local > .screen{width:var(--sw,420px);height:var(--sh,520px)}
+.stage.local{width:calc(var(--sw,420px) * var(--k));height:calc(var(--sh,520px) * var(--k))}
+@media (max-width:1100px){.stage{--k:.56}}
+@media (max-width:820px){.stage{--k:.42}.stage.phone{--k:.62}}
+
+/* 屏幕下方图注 */
+.cap{display:flex;gap:12px;align-items:baseline;margin-top:14px;padding-left:2px}
+.cap .n{font-family:var(--f-mono);font-size:9.5px;letter-spacing:1.05px;color:var(--c-ink-3);flex:none}
+.cap .x{font-size:12px;line-height:1.7;color:var(--c-ink-2);max-width:76ch}
+.cap .x b{color:var(--c-ink);font-weight:600}
+
+/* ═══ 应用内通用组件（设计稿自身即样例） ═══════════════════ */
+
+/* 侧栏 */
+.app{display:grid;grid-template-columns:236px 1fr;height:100%}
+.rail{display:flex;flex-direction:column;border-right:1px solid var(--c-rule);
+  padding:18px 14px 14px;background:var(--c-canvas)}
+.rail-brand{display:flex;align-items:center;gap:10px;padding:0 4px 22px}
+.rail-logo{width:28px;height:32px;background:var(--c-ink);color:var(--c-milk);display:grid;place-items:center;
+  font-size:12.5px;font-weight:800;letter-spacing:-.6px;flex:none}
+.rail-name{font-size:14px;font-weight:700;letter-spacing:-.2px;line-height:1.2}
+.rail-name .en{display:block;font-family:var(--f-mono);font-size:8.5px;letter-spacing:1.05px;
+  color:var(--c-ink-3);font-weight:500;margin-top:3px}
+.rail-nav{display:flex;flex-direction:column;gap:1px}
+.rail-item{display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:2px;
+  font-size:13px;color:var(--c-ink-2);position:relative;text-align:left;width:100%;transition:background .14s}
+.rail-item:hover{background:rgb(29 28 25/.045)}
+.rail-item .ct{margin-left:auto;font-family:var(--f-mono);font-size:9.5px;letter-spacing:.6px;color:var(--c-ink-3)}
+.rail-item.on{color:var(--c-ink);font-weight:600;background:var(--c-surface)}
+.rail-item.on::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:2px;background:var(--c-accent)}
+.rail-item.on .ct{color:var(--c-ink-2)}
+
+.rail-sub{margin-top:26px}
+.rail-sub-h{display:flex;align-items:center;gap:8px;padding:0 10px 9px}
+.rail-sub-h span:first-child{font-family:var(--f-mono);font-size:8.5px;letter-spacing:1.05px;color:var(--c-ink-3)}
+.rail-sub-h span:last-child{flex:1;height:.6px;background:var(--c-rule)}
+.recent{display:flex;flex-direction:column;gap:1px}
+.recent-item{display:flex;align-items:center;gap:9px;padding:6px 10px;border-radius:2px;text-align:left;width:100%}
+.recent-item:hover{background:rgb(29 28 25/.045)}
+.recent-thumb{width:20px;height:28px;border-radius:1px;flex:none;position:relative;overflow:hidden;
+  box-shadow:inset 0 0 0 .5px rgb(0 0 0/.15)}
+.recent-thumb i{position:absolute;left:0;bottom:0;background:var(--c-accent);height:2px;display:block}
+.recent-t{min-width:0;flex:1}
+.recent-t b{display:block;font-size:11.5px;font-weight:500;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;color:var(--c-ink)}
+.recent-t em{display:block;font-family:var(--f-mono);font-size:8.5px;letter-spacing:.5px;
+  font-style:normal;color:var(--c-ink-3);margin-top:2px}
+.rail-foot{margin-top:auto;padding:12px 10px 2px;border-top:1px solid var(--c-rule);
+  display:flex;flex-direction:column;gap:5px}
+.rail-foot span{font-family:var(--f-mono);font-size:8.5px;letter-spacing:.7px;color:var(--c-ink-3)}
+
+/* 主区 */
+.main{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.phead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
+  padding:26px 94px 16px;flex:none}
+.phead-l .kick{font-family:var(--f-mono);font-size:9px;letter-spacing:1.05px;color:var(--c-ink-3);
+  display:flex;align-items:center;gap:8px}
+.phead-l .kick s{width:3px;height:3px;background:var(--c-ink-3);display:block}
+.phead-l h1{font-size:34px;line-height:1.08;font-weight:800;letter-spacing:-1.1px;margin-top:8px}
+.phead-r{display:flex;align-items:center;gap:8px;flex:none;padding-bottom:4px}
+
+/* 搜索框：focus 时四角出现套准标记（签名交互） */
+.srch{position:relative;display:flex;align-items:center;gap:8px;width:262px;height:34px;
+  padding:0 10px;background:var(--c-surface);border:1px solid var(--c-rule-2);border-radius:var(--r-panel);
+  transition:border-color .16s}
+.srch svg{flex:none;color:var(--c-ink-3)}
+.srch input{flex:1;min-width:0;border:0;outline:0;background:transparent;font-size:12.5px;color:var(--c-ink)}
+.srch input::placeholder{color:var(--c-ink-3)}
+.srch kbd{font-family:var(--f-mono);font-size:9px;color:var(--c-ink-3);border:1px solid var(--c-rule-2);
+  border-radius:2px;padding:1px 4px;flex:none}
+.srch:focus-within{border-color:var(--c-ink)}
+.srch:focus-within .reg{opacity:1}
+.reg{position:absolute;width:7px;height:7px;opacity:0;transition:opacity .16s;pointer-events:none}
+.reg::before,.reg::after{content:"";position:absolute;background:var(--c-ink)}
+.reg::before{width:7px;height:.7px}
+.reg::after{width:.7px;height:7px}
+.reg.tl{top:-4px;left:-4px}
+.reg.tl::before{top:3px;left:0}.reg.tl::after{top:0;left:3px}
+.reg.tr{top:-4px;right:-4px}
+.reg.tr::before{top:3px;right:0}.reg.tr::after{top:0;right:3px}
+.reg.bl{bottom:-4px;left:-4px}
+.reg.bl::before{bottom:3px;left:0}.reg.bl::after{bottom:0;left:3px}
+.reg.br{bottom:-4px;right:-4px}
+.reg.br::before{bottom:3px;right:0}.reg.br::after{bottom:0;right:3px}
+
+/* 分段控件（视图切换）：选中 = 墨底，无滑动动画 */
+.seg{display:flex;height:34px;padding:2px;background:var(--c-surface);border:1px solid var(--c-rule-2);
+  border-radius:var(--r-panel)}
+.seg button{display:grid;place-items:center;width:30px;height:28px;border-radius:2px;color:var(--c-ink-3);
+  transition:background .12s,color .12s}
+.seg button:hover{color:var(--c-ink)}
+.seg button.on{background:var(--c-ink);color:var(--c-milk)}
+
+/* 按钮 */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 13px;
+  border-radius:var(--r-panel);font-size:12.5px;font-weight:500;transition:background .14s,transform .1s}
+.btn:active{transform:scale(.985)}
+.btn-primary{background:var(--c-ink);color:var(--c-milk)}
+.btn-primary:hover{background:#2C2A25}
+.btn-ghost{border:1px solid var(--c-rule-2);color:var(--c-ink)}
+.btn-ghost:hover{background:var(--c-surface)}
+.btn-quiet{color:var(--c-ink-2)}
+.btn-quiet:hover{background:rgb(29 28 25/.05);color:var(--c-ink)}
+.btn-accent{background:var(--c-accent);color:#fff}
+.btn-sm{height:28px;padding:0 10px;font-size:11.5px}
+.btn-lg{height:40px;padding:0 18px;font-size:13px}
+.ico{display:grid;place-items:center;width:34px;height:34px;border-radius:var(--r-panel);color:var(--c-ink-2);
+  transition:background .14s,color .14s}
+.ico:hover{background:rgb(29 28 25/.055);color:var(--c-ink)}
+.ico.on{background:var(--c-ink);color:var(--c-milk)}
+
+/* 继续阅读 */
+.resume{margin:0 94px 22px;display:flex;align-items:center;gap:18px;padding:14px 18px;
+  background:var(--c-surface);border:1px solid var(--c-rule);border-radius:var(--r-panel);flex:none}
+.resume-cover{position:relative;width:44px;height:62px;border-radius:2px;flex:none;
+  box-shadow:inset 0 0 0 .5px rgb(0 0 0/.14)}
+.resume-cover::after{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+  background:linear-gradient(90deg,rgb(0 0 0/.22),transparent)}
+.resume-mid{min-width:0;flex:1}
+.resume-k{font-family:var(--f-mono);font-size:8.5px;letter-spacing:1.05px;color:var(--c-accent);
+  display:flex;align-items:center;gap:6px}
+.resume-k i{width:14px;height:.7px;background:var(--c-accent);display:block;font-style:normal}
+.resume-mid h3{font-size:17px;font-weight:700;letter-spacing:-.3px;margin-top:5px}
+.resume-meta{display:flex;align-items:center;gap:10px;margin-top:7px}
+.resume-meta span{font-family:var(--f-mono);font-size:9px;letter-spacing:.7px;color:var(--c-ink-3)}
+.resume-bar{width:112px;height:2px;background:var(--c-rule);position:relative}
+.resume-bar i{position:absolute;left:0;top:0;bottom:0;background:var(--c-accent);display:block}
+.resume-right{display:flex;align-items:center;gap:14px;flex:none}
+.resume-pct{font-family:var(--f-mono);font-size:22px;font-weight:500;letter-spacing:-.5px;color:var(--c-ink);
+  font-variant-numeric:tabular-nums}
+.resume-pct small{font-size:9px;color:var(--c-ink-3);letter-spacing:.4px;margin-left:2px}
+
+/* 书墙 */
+.wall{flex:1;min-height:0;overflow:hidden;padding:8px 94px 0}
+.wall-inner{max-width:936px;margin:0 auto}
+.wall-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.wall-head .c{font-family:var(--f-mono);font-size:8.5px;letter-spacing:1.05px;color:var(--c-ink-3)}
+.wall-head .l{flex:1;height:.6px;background:var(--c-rule)}
+.wall-head .d{width:3px;height:3px;background:var(--c-ink)}
+.row{display:flex;align-items:flex-end;gap:26px;padding-left:2px}
+.plank{height:4px;margin-top:0;border-radius:1px;
+  background:linear-gradient(180deg,#F2EEE4 0%,#DED8C9 26%,#CDC6B4 100%);
+  box-shadow:0 1px 0 rgb(255 255 255/.6) inset,0 5px 12px -5px rgb(29 28 25/.42)}
+.row-wrap + .row-wrap{margin-top:26px}
+
+/* 立体书（等轴测：depthX .66 / depthY -.30 → 24.6° / 65.4°） */
+.bk{--bw:120px;--sp:calc(var(--bw) * .117);--hd:calc(var(--sp) * .457);
+  position:relative;width:var(--bw);height:calc(var(--bw) * 1.414);
+  flex:none;margin-right:var(--sp);transition:transform .18s cubic-bezier(.2,0,0,1)}
+.bk:hover{transform:translateY(-5px)}
+.bk-face{position:absolute;inset:0;border-radius:0 2px 2px 0;background:linear-gradient(158deg,var(--c1),var(--c2));
+  display:flex;flex-direction:column;align-items:center;padding:9px 0 10px;overflow:hidden;
+  box-shadow:inset 1px 0 0 rgb(255 255 255/.12),inset 0 0 0 .5px rgb(0 0 0/.12)}
+.bk-face::before{content:"";position:absolute;left:0;top:0;bottom:0;width:8px;
+  background:linear-gradient(90deg,rgb(0 0 0/.20),transparent)}
+.bk-face::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(118deg,rgb(255 255 255/.13),transparent 44%)}
+.bk-code{font-family:var(--f-mono);font-size:6px;letter-spacing:.9px;color:rgb(255 255 255/.55);
+  position:relative;z-index:1;margin-bottom:auto}
+.bk-title{writing-mode:vertical-rl;text-orientation:upright;font-family:var(--f-serif);
+  font-size:12.5px;line-height:1.15;letter-spacing:1.5px;color:rgb(255 255 255/.94);
+  align-self:flex-end;margin-right:11px;position:relative;z-index:1;
+  text-shadow:0 .5px 1px rgb(0 0 0/.25)}
+.bk-prog{position:absolute;left:0;bottom:0;height:2px;background:var(--c-accent);z-index:2}
+.bk-top{position:absolute;left:0;top:calc(var(--hd) * -1);width:100%;height:var(--hd);
+  transform:skewX(65.4deg);transform-origin:0 0;background:var(--c2);filter:brightness(1.22)}
+.bk-spine{position:absolute;left:100%;top:0;width:var(--sp);height:100%;
+  transform:skewY(-24.6deg);transform-origin:0 0;background:var(--c2);filter:brightness(.74)}
+.bk-shadow{position:absolute;left:2px;right:calc(var(--sp) * -1);bottom:-4px;height:7px;
+  background:radial-gradient(60% 100% at 40% 50%,rgb(29 28 25/.20),transparent 72%);filter:blur(1.5px)}
+
+/* toast / dialog 样例 */
+.toast{display:inline-flex;align-items:center;gap:9px;height:34px;padding:0 14px;border-radius:var(--r-panel);
+  background:var(--c-ink);color:var(--c-milk);font-size:12px;
+  box-shadow:0 10px 26px -14px rgb(29 28 25/.5)}
+.toast .bar{width:2px;height:14px;background:var(--c-accent);flex:none}
+
+/* 档案标签（chip） */
+.tag{display:inline-flex;align-items:center;gap:5px;height:18px;padding:0 6px;border-radius:2px;
+  font-family:var(--f-mono);font-size:8.5px;letter-spacing:.8px;
+  border:1px solid var(--c-rule-2);color:var(--c-ink-2)}
+.tag.solid{background:var(--c-ink);color:var(--c-milk);border-color:var(--c-ink)}
+.tag.acc{background:var(--c-accent-soft);border-color:#DFC6BD;color:#8E3623}
+
+/* 色板 */
+.sw{border:1px solid var(--c-rule);border-radius:var(--r-panel);overflow:hidden;background:var(--c-surface)}
+.sw-chip{height:74px;position:relative}
+.sw-chip span{display:none}
+.sw-b{padding:9px 10px 10px}
+.sw-b b{display:block;font-size:11.5px;font-weight:600}
+.sw-b em{display:block;font-family:var(--f-mono);font-size:9px;font-style:normal;letter-spacing:.5px;
+  color:var(--c-ink-3);margin-top:3px}
+.sw-b p{font-size:10.5px;line-height:1.55;color:var(--c-ink-3);margin-top:5px}
+
+/* 字阶样例 */
+.type-row{display:flex;align-items:baseline;gap:16px;padding:11px 0;border-bottom:1px solid var(--c-rule)}
+.type-row .m{font-family:var(--f-mono);font-size:9px;letter-spacing:.8px;color:var(--c-ink-3);
+  width:104px;flex:none}
+.type-row .s{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 组件样例行 */
+.spec-row{display:grid;grid-template-columns:150px 1fr;gap:20px;align-items:center;
+  padding:16px 0;border-bottom:1px solid var(--c-rule)}
+.spec-row .k{font-family:var(--f-mono);font-size:9px;letter-spacing:1.05px;color:var(--c-ink-3);line-height:1.6}
+.spec-row .v{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* 勾选 / 步骤 */
+.check{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.75;color:var(--c-ink-2)}
+.check i{width:14px;height:14px;border:1px solid var(--c-rule-2);flex:none;margin-top:2px;position:relative;
+  font-style:normal;display:grid;place-items:center;font-size:9px;color:transparent;border-radius:1px}
+.check.on i{background:var(--c-ink);border-color:var(--c-ink);color:var(--c-milk)}
+/* 侧栏统计网格（1px 间隙的档案格） */
+.rail-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--c-rule);border:1px solid var(--c-rule)}
+.rail-cell{background:var(--c-canvas);padding:9px 10px}
+.rail-cell b{font-family:var(--f-mono);font-size:16px;font-weight:500;letter-spacing:-.5px;display:block;line-height:1.1}
+.rail-cell span{font-family:var(--f-mono);font-size:8px;letter-spacing:.8px;color:var(--c-ink-3);display:block;margin-top:3px}
+
+/* ═══ 阅读页 ═══════════════════════════════════════════════ */
+.rd{height:100%;display:flex;background:#F4F0E6;color:#2A2620}
+.rd-main{flex:1;min-width:0;position:relative;display:flex;flex-direction:column}
+.rd-top{position:absolute;top:0;left:0;right:0;height:56px;display:flex;align-items:center;gap:10px;
+  padding:0 18px;background:rgba(254,253,248,.9);backdrop-filter:blur(14px);
+  border-bottom:1px solid #E5DFD0;z-index:5}
+.rd-top .bk-t{font-size:13.5px;font-weight:600;letter-spacing:-.1px;max-width:320px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.rd-top .bk-m{font-family:var(--f-mono);font-size:8.5px;letter-spacing:1px;color:#A79E8C;
+  padding-left:10px;margin-left:2px;border-left:1px solid #E5DFD0;white-space:nowrap}
+.rd-top .sp{flex:1}
+.rd-ico{display:grid;place-items:center;width:30px;height:30px;border-radius:3px;color:#5C564A}
+.rd-ico:hover{background:rgba(42,38,32,.06);color:#2A2620}
+.rd-ico.on{background:#2A2620;color:#FEFDF8}
+
+.rd-body{flex:1;min-height:0;display:flex;justify-content:center;padding:100px 40px 66px;overflow:hidden}
+.rd-col{width:620px;max-width:100%}
+.rd-ch{text-align:center;margin-bottom:28px}
+.rd-ch .k{font-family:var(--f-mono);font-size:8px;letter-spacing:1.8px;color:#A79E8C;display:block;margin-bottom:11px}
+.rd-ch h2{font-family:var(--f-serif);font-size:26px;font-weight:600;letter-spacing:2px}
+.rd-ch .r{width:36px;height:1px;background:#C9BFA8;margin:15px auto 0}
+.rd-art{font-family:var(--f-serif);font-size:19.5px;line-height:1.95;text-align:justify;color:#2A2620}
+.rd-art p{margin:0 0 .55em;text-indent:2em}
+.rd-pg{position:absolute;right:40px;bottom:24px;font-family:var(--f-mono);font-size:9.5px;
+  letter-spacing:.9px;color:#A79E8C}
+
+.rd-dock{position:absolute;left:50%;transform:translateX(-50%);bottom:20px;width:560px;height:56px;
+  display:flex;align-items:center;gap:15px;padding:0 17px;background:rgba(254,253,248,.95);
+  backdrop-filter:blur(12px);border:1px solid #E5DFD0;border-radius:4px;
+  box-shadow:0 18px 44px -24px rgba(42,38,32,.45);z-index:6}
+.rd-dock .tr{flex:1;height:2px;background:#E2DAC6;position:relative}
+.rd-dock .tr i{position:absolute;left:0;top:0;bottom:0;background:#B4472F;display:block}
+.rd-dock .tr u{position:absolute;left:34%;top:-5px;width:12px;height:12px;margin-left:-6px;
+  background:#FEFDF8;border:1.5px solid #2A2620;display:block}
+.rd-dock .cnt{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.6px;color:#7A7365;flex:none;
+  font-variant-numeric:tabular-nums}
+.rd-dock .dv{width:1px;height:20px;background:#E5DFD0;flex:none}
+.dot{width:18px;height:18px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.22)}
+.dot.on{box-shadow:inset 0 0 0 1px rgba(0,0,0,.22),0 0 0 2px rgba(42,38,32,.6),0 0 0 4px #FEFDF8}
+.rd-aa{display:flex;align-items:center;gap:2px;flex:none}
+.rd-aa button{width:24px;height:24px;display:grid;place-items:center;font-size:12px;color:#5C564A;
+  border-radius:2px;font-weight:600}
+.rd-aa button:hover{background:rgba(42,38,32,.06)}
+.rd-aa .v{font-family:var(--f-mono);font-size:9.5px;color:#7A7365;width:32px;text-align:center}
+
+/* 目录栏 */
+.rd-toc{width:320px;flex:none;border-left:1px solid #E5DFD0;background:#FBF9F3;display:flex;flex-direction:column}
+.toc-h{padding:17px 16px 13px;display:flex;align-items:flex-start;justify-content:space-between;
+  border-bottom:1px solid #E5DFD0}
+.toc-h h3{font-size:14.5px;font-weight:700;letter-spacing:-.2px;color:#2A2620}
+.toc-h .k{font-family:var(--f-mono);font-size:8px;letter-spacing:1.05px;color:#A79E8C;margin-top:5px;display:block}
+.toc-list{flex:1;min-height:0;overflow:hidden;padding:6px 8px 12px}
+.toc-g{padding:13px 8px 7px;display:flex;align-items:center;gap:8px}
+.toc-g span{font-family:var(--f-mono);font-size:8px;letter-spacing:1.05px;color:#A79E8C;white-space:nowrap}
+.toc-g i{flex:1;height:.6px;background:#E5DFD0;display:block}
+.toc-i{height:38px;display:flex;align-items:center;gap:10px;padding:0 8px;font-size:12.5px;color:#5C564A;
+  border-radius:2px;position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.toc-i .n{font-family:var(--f-mono);font-size:9px;color:#A79E8C;width:18px;flex:none;letter-spacing:.4px}
+.toc-i.done{color:#A79E8C}
+.toc-i.on{background:#F1E4DE;color:#2A2620;font-weight:600}
+.toc-i.on::before{content:"";position:absolute;left:0;top:5px;bottom:5px;width:2px;background:#B4472F}
+.toc-i.on .n{color:#B4472F}
+
+/* ═══ 阅读设置浮层 ═══════════════════════════════════════════ */
+.prefs{height:100%;display:flex;flex-direction:column;background:var(--c-milk);padding:0}
+.prefs-h{padding:16px 18px 13px;border-bottom:1px solid var(--c-rule);display:flex;align-items:flex-start;justify-content:space-between}
+.prefs-h h4{font-size:13.5px;font-weight:700;letter-spacing:-.2px}
+.prefs-h .k{font-family:var(--f-mono);font-size:8px;letter-spacing:1.05px;color:var(--c-ink-3);margin-top:5px;display:block}
+.prefs-b{padding:4px 18px 0;flex:1}
+.prefs-r{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0;
+  border-bottom:1px solid #F1EFE9;min-height:42px}
+.prefs-r .lb{font-size:12px;color:var(--c-ink-2);white-space:nowrap;flex:none;width:52px}
+.prefs-r .vl{font-family:var(--f-mono);font-size:10px;letter-spacing:.5px;color:var(--c-ink);width:52px;
+  text-align:right;flex:none;font-variant-numeric:tabular-nums}
+.prefs-r .ctl{flex:1;display:flex;align-items:center;gap:10px}
+.sl{flex:1;height:2px;background:var(--c-rule);position:relative}
+.sl i{position:absolute;left:0;top:0;bottom:0;background:var(--c-ink);display:block}
+.sl u{position:absolute;top:-6px;width:14px;height:14px;margin-left:-7px;background:var(--c-milk);
+  border:1.5px solid var(--c-ink);display:block}
+.prefs-f{padding:12px 18px 14px;border-top:1px solid var(--c-rule);background:#FBF9F3}
+.pv{font-family:var(--f-serif);font-size:12.5px;line-height:1.9;color:#2A2620;background:#F4F0E6;
+  padding:10px 12px;border-radius:2px}
+
+/* ═══ 设置页 ═══════════════════════════════════════════════ */
+.set-scroll{flex:1;min-height:0;overflow:hidden;padding:0 94px}
+.set-col{max-width:760px;margin:0 auto;padding-top:4px}
+.set-g{display:grid;grid-template-columns:176px 1fr;gap:26px;padding:20px 0 12px;
+  border-top:1px solid var(--c-rule)}
+.set-g:first-child{border-top:0}
+.set-g .gk{font-family:var(--f-mono);font-size:8px;letter-spacing:1.05px;color:var(--c-ink-3);display:block;margin-bottom:7px}
+.set-g h4{font-size:13px;font-weight:700;letter-spacing:-.1px}
+.set-g p.d{font-size:11px;line-height:1.7;color:var(--c-ink-3);margin-top:7px;max-width:24ch}
+.set-row{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:10px 0;
+  border-bottom:1px solid #F1EFE9;min-height:44px}
+.set-row:last-child{border-bottom:0}
+.set-row .t{font-size:12.5px;color:var(--c-ink)}
+.set-row .s{font-size:11px;color:var(--c-ink-3);margin-top:3px;line-height:1.6}
+.set-row .v{font-family:var(--f-mono);font-size:10px;letter-spacing:.5px;color:var(--c-ink-2);flex:none}
+
+/* ═══ 状态：空 / 导入中 / 错误 ═════════════════════════════ */
+.blank{border:1px dashed var(--c-rule-2);border-radius:2px;padding:30px 18px;text-align:center;position:relative;height:100%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--c-canvas)}
+.blank .reg{opacity:.65}
+.blank h4{font-family:var(--f-serif);font-size:19px;font-weight:600;letter-spacing:1px;margin-top:16px}
+.blank p{font-size:11.5px;line-height:1.7;color:var(--c-ink-3);margin-top:7px;max-width:26ch}
+.blank .btn{margin-top:16px}
+
+/* ═══ 手机端 ═══════════════════════════════════════════════ */
+.ph{height:100%;display:flex;flex-direction:column;background:var(--c-canvas)}
+.ph-top{padding:48px 18px 10px;flex:none}
+.ph-mast{display:flex;align-items:flex-end;justify-content:space-between}
+.ph-mast h1{font-size:25px;font-weight:800;letter-spacing:-.8px}
+.ph-mast .k{font-family:var(--f-mono);font-size:7.5px;letter-spacing:1px;color:var(--c-ink-3);margin-bottom:4px}
+.ph-acts{display:flex;gap:2px}
+.ph-srch{margin-top:12px;display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;
+  background:var(--c-surface);border:1px solid var(--c-rule-2);border-radius:3px}
+.ph-srch span{font-size:12px;color:var(--c-ink-3)}
+.ph-resume{margin:12px 18px 0;display:flex;align-items:center;gap:11px;padding:10px 12px;
+  background:var(--c-surface);border:1px solid var(--c-rule);border-radius:3px}
+.ph-resume .cv{width:30px;height:42px;border-radius:2px;flex:none;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.14)}
+.ph-resume .m{flex:1;min-width:0}
+.ph-resume .m .k{font-family:var(--f-mono);font-size:7px;letter-spacing:1px;color:#B4472F}
+.ph-resume .m h4{font-size:13px;font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ph-resume .m .b{margin-top:6px;height:2px;background:var(--c-rule);position:relative}
+.ph-resume .m .b i{position:absolute;left:0;top:0;bottom:0;background:#B4472F;display:block}
+.ph-wall{flex:1;min-height:0;overflow:hidden;padding:16px 18px 0}
+.ph-row{display:flex;align-items:flex-end;gap:16px;padding-left:1px}
+.ph-plank{height:2px;background:linear-gradient(180deg,#E9E5DA,#D4CFC0);margin-bottom:18px}
+.ph-tab{height:56px;flex:none;border-top:1px solid var(--c-rule);display:flex;background:rgba(254,253,248,.96);
+  backdrop-filter:blur(12px)}
+.ph-tab button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  font-size:9.5px;color:var(--c-ink-3);position:relative}
+.ph-tab button.on{color:var(--c-ink);font-weight:600}
+.ph-tab button.on::before{content:"";position:absolute;top:0;width:20px;height:2px;background:var(--c-accent)}
+</style>
+</head>
+<body>
+<div class="doc">
+
+  <!-- ═══ 报头 ═══ -->
+  <header class="masthead">
+    <div class="mast-left">
+      <div class="mast-logo">WJ</div>
+      <div class="mast-titles">
+        <p class="mast-kicker">PLAINREAD · UI SPECIFICATION · DESKTOP FIRST</p>
+        <h1>简阅 · 档案书阁</h1>
+        <p class="sub">v2 视觉重设计稿。以「档案」为造型语言、以「奶白」为底色、以「立体书墙」为书架形态；桌面端获得独立骨架，手机端沿用同一套令牌。</p>
+      </div>
+    </div>
+    <div class="mast-right">
+      <span class="code">DOC / UI-002</span>
+      <span class="ver">v2.0 · 2026.10.18</span>
+      <span class="code">REF · WENKU8_FLUTTER</span>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <a href="#s1" class="on"><i>01</i>定位与取舍</a>
+    <a href="#s2"><i>02</i>色彩</a>
+    <a href="#s3"><i>03</i>排版与几何</a>
+    <a href="#s4"><i>04</i>组件</a>
+    <a href="#s5"><i>05</i>桌面书架</a>
+    <a href="#s6"><i>06</i>阅读页</a>
+    <a href="#s7"><i>07</i>设置与浮层</a>
+    <a href="#s8"><i>08</i>手机端</a>
+    <a href="#s9"><i>09</i>交互细节</a>
+    <a href="#s10"><i>10</i>落地映射</a>
+    <a href="#s11"><i>11</i>待确认</a>
+  </nav>
+
+  <!-- ═══ 01 定位 ═══ -->
+  <section class="sec" id="s1">
+    <div class="sec-meta"><span class="sec-code">01 — DIRECTION</span><span class="sec-line"></span><span class="sec-dot"></span></div>
+    <h2>这次动的不是配色，是造型语言</h2>
+    <p class="lead">参考项目最值钱的不是它用了什么颜色，而是它有<b>一套自洽的比喻</b>：档案。编号、索引线、套准标记、格网、等轴测书架——所有细节都在说「这是一间藏书档案室」。v1 的问题不是不好看，而是<b>没有比喻</b>：暖纸底 + 大圆角 + 卡片阴影，是通用阅读器长相，换个主色就能是任何 App。v2 把比喻补上。</p>
+
+    <div class="g3" style="margin-top:24px">
+      <div class="note">
+        <h4>① 奶白取代纸黄</h4>
+        <p>底色从 <code style="font-family:var(--f-mono);font-size:11px">#FBF8F0</code> 提到 <code style="font-family:var(--f-mono);font-size:11px">#F4F3EF</code>：去黄、微冷、提亮。纸黄留给「阅读主题」，界面本身保持中性——桌面上长时间看，偏黄的界面会让白底内容显脏。</p>
+      </div>
+      <div class="note">
+        <h4>② 圆角从 16/24 收到 4/3</h4>
+        <p>大圆角是 2019 年的语言，且不可逆地带来"玩具感"。档案系的圆角只做<b>印刷品的轻微倒角</b>：面板 4px、书封 3px、按钮 3px。质感靠 1px 描边和材质差，而不是靠"柔软"。</p>
+      </div>
+      <div class="note">
+        <h4>③ 加一层"元数据"</h4>
+        <p>等宽小字承担编号、册数、章节、体积、日期（<code style="font-family:var(--f-mono);font-size:11px">WJ-000118</code>、<code style="font-family:var(--f-mono);font-size:11px">CH.118 / 342</code>）。它几乎不占视觉重量，但让界面从"卡片堆"变成"有编目的收藏"。</p>
+      </div>
+    </div>
+
+    <h3 style="font-size:15px;font-weight:700;margin:38px 0 4px;letter-spacing:-.2px">与 v1 的逐项差异</h3>
+    <table class="t" style="margin-top:12px">
+      <thead><tr><th>维度</th><th>v1 现状</th><th>v2 档案书阁</th><th>为什么</th></tr></thead>
+      <tbody>
+        <tr><td>界面底色</td><td>#FBF8F0 纸黄</td><td class="yes">#F4F3EF 暖灰白</td><td>纸黄降为阅读主题，界面保持中性</td></tr>
+        <tr><td>主色</td><td>#2E6B5A 黛青</td><td class="yes">#1D1C19 墨（主操作）+ #B4472F 朱砂（点睛）</td><td>彩色按钮是廉价感来源；墨底白字才有印刷品分量</td></tr>
+        <tr><td>圆角</td><td>6 / 10 / 16 / 24</td><td class="yes">2 / 3 / 4 / 6</td><td>去玩具化，造型更"贵"</td></tr>
+        <tr><td>层级</td><td>三级阴影 e1–e3</td><td class="yes">无阴影 + 1px 描边；仅浮层用长柔影</td><td>阴影在奶白底上会发灰；档案靠线不靠阴影</td></tr>
+        <tr><td>书架</td><td>平面网格 + 搁板</td><td class="yes">等轴测立体书墙（真实书脊厚度）</td><td>书要有体积，书架才有"一墙书"的意境</td></tr>
+        <tr><td>桌面布局</td><td>大号手机（max-w-3xl 居中）</td><td class="yes">236px 侧栏 + 960px 书墙 + 620px 阅读栏</td><td>1440 宽屏下 v1 两侧各空 300px，纯浪费</td></tr>
+        <tr><td>标题</td><td>20px / 600</td><td class="yes">34px / 800 / 字距 −1.1</td><td>大字距收紧是现代印刷标题的关键特征</td></tr>
+        <tr><td>图标按钮</td><td>44×44 圆角块</td><td class="yes">34×34 方钮（桌面）/ 44 触屏</td><td>桌面鼠标不需要 44px，密度换信息量</td></tr>
+        <tr><td>信息密度</td><td>书名 + 进度</td><td class="yes">书名 + 编号 + 章次 + 体积 + 日期</td><td>桌面视野宽，元数据是"专业感"的来源</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note" style="margin-top:22px;border-left:2px solid var(--c-accent)">
+      <h4>一个必须明确表态的冲突</h4>
+      <p>v1 设计规范第 5 条写死了「双端同源：桌面端 = 大号手机端，不另造桌面语言」。本稿<b>部分违背</b>它：桌面端改用左侧栏骨架。理由是本阶段「桌面优先」，而 1440×900 下顶部栏 + 单列书墙会让 60% 的屏幕成为空白。折中方案：<b>令牌、组件、图标、动效全部同源，只允许骨架断点不同</b>——不是两套设计，是同一套设计的两种密度。此项需你点头（见 §11 D1）。</p>
+    </div>
+  </section>
+
+  <!-- ═══ 02 色彩 ═══ -->
+  <section class="sec" id="s2">
+    <div class="sec-meta"><span class="sec-code">02 — COLOR</span><span class="sec-line"></span><span class="sec-dot"></span></div>
+    <h2>近乎单色，只留一处朱砂</h2>
+    <p class="lead">整套界面只有三个色相：<b>墨</b>（文字与主操作）、<b>奶白</b>（承载面）、<b>朱砂</b>（当前位置）。彩色越少，朱砂的那一小条越有力——它是"你正读到这里"的唯一信号。<b>朱砂面积硬性上限 5%</b>，任一屏超出即视为走样。</p>
+
+    <div class="g4" style="margin-top:24px">
+      <div class="sw"><div class="sw-chip" style="background:#F4F3EF"><span>#F4F3EF</span></div>
+        <div class="sw-b"><b>画布 canvas</b><em>--c-canvas</em><p>页面底。暖灰白，比纯白柔和、比纸黄干净。</p></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#FDFCFA"><span>#FDFCFA</span></div>
+        <div class="sw-b"><b>承载面 surface</b><em>--c-surface</em><p>卡片、侧栏选中态。与画布只差 3% 明度，靠 1px 线分隔。</p></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#FEFDF8"><span>#FEFDF8</span></div>
+        <div class="sw-b"><b>奶白 milk</b><em>--c-milk</em><p>浮层专用：菜单、面板、Toast。唯一允许叠 blur 的层。</p></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#1D1C19"><span>#1D1C19</span></div>
+        <div class="sw-b"><b>墨 ink</b><em>--c-ink</em><p>正文、主按钮底。对奶白 15.6:1。</p></div></div>
+    </div>
+
+    <div class="g4" style="margin-top:14px">
+      <div class="sw"><div class="sw-chip" style="background:#5F5B53"><span>#5F5B53</span></div>
+        <div class="sw-b"><b>次文字</b><em>--c-ink-2</em><p>6.3:1。说明、副标题。</p></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#8E8A81"><span>#8E8A81</span></div>
+        <div class="sw-b"><b>弱文字</b><em>--c-ink-3</em><p>3.4:1。<b>仅限</b>编号、日期、页码等非交互元数据。</p></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#E3E0D8"><span>#E3E0D8</span></div>
+        <div class="sw-b"><b>细线 rule</b><em>--c-rule</em><p>分隔线、卡片描边。统一 1px。</p></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#B4472F"><span>#B4472F</span></div>
+        <div class="sw-b"><b>朱砂 accent</b><em>--c-accent</em><p>5.3:1。当前章、书签、进度条。<b>面积 ≤ 5%</b>。</p></div></div>
+    </div>
+
+    <h3 style="font-size:15px;font-weight:700;margin:38px 0 4px;letter-spacing:-.2px">阅读主题（三套，界面跟随明暗）</h3>
+    <p class="lead" style="margin-top:8px;font-size:12.5px">v1 的三主题保留，只微调数值：纸黄去掉一点黄，白改成奶白（纯白在夜间切换时刺眼），夜间从 #121212 提到 #191919（参考项目的暗面，纯黑会让文字"镶边"）。</p>
+    <div class="g3" style="margin-top:16px">
+      <div class="sw"><div style="background:#F4F0E6;padding:18px 16px;border-bottom:1px solid var(--c-rule)">
+          <p style="font-family:var(--f-serif);font-size:13px;line-height:1.9;color:#2A2620">风从长街尽头卷过来，带着雪粒和铁锈的味道。他把手拢进袖子里，慢慢往前走。</p>
+        </div>
+        <div class="sw-b"><b>纸黄 paper · 默认</b><em>bg #F4F0E6 · fg #2A2620</em><p>正文对比 11.8:1</p></div></div>
+      <div class="sw"><div style="background:#FDFCFA;padding:18px 16px;border-bottom:1px solid var(--c-rule)">
+          <p style="font-family:var(--f-serif);font-size:13px;line-height:1.9;color:#1C1B18">风从长街尽头卷过来，带着雪粒和铁锈的味道。他把手拢进袖子里，慢慢往前走。</p>
+        </div>
+        <div class="sw-b"><b>奶白 white</b><em>bg #FDFCFA · fg #1C1B18</em><p>正文对比 15.9:1</p></div></div>
+      <div class="sw"><div style="background:#191919;padding:18px 16px;border-bottom:1px solid var(--c-rule)">
+          <p style="font-family:var(--f-serif);font-size:13px;line-height:1.9;color:#C6C2B9">风从长街尽头卷过来，带着雪粒和铁锈的味道。他把手拢进袖子里，慢慢往前走。</p>
+        </div>
+        <div class="sw-b"><b>夜间 night</b><em>bg #191919 · fg #C6C2B9</em><p>正文对比 10.6:1；层级改用描边</p></div></div>
+    </div>
+
+    <div class="note" style="margin-top:20px">
+      <h4>暗色界面令牌（夜间主题时书架/设置同步切换）</h4>
+      <p style="font-family:var(--f-mono);font-size:10.5px;line-height:2;color:var(--c-ink-2);margin-top:2px">
+        canvas #191919 · surface #242424 · milk #2D2D2D · ink #F2F2F2 · ink-2 #B7B7B7 · ink-3 #8A8A8A · rule #3C3C3C · accent #D8694E
+      </p>
+      <p style="margin-top:8px">暗色下的朱砂必须提亮到 <code style="font-family:var(--f-mono);font-size:11px">#D8694E</code>，否则在 #191919 上只有 2.8:1，作为唯一的状态色会失效。</p>
+    </div>
+  </section>
+
+  <!-- ═══ 03 排版与几何 ═══ -->
+  <section class="sec" id="s3">
+    <div class="sec-meta"><span class="sec-code">03 — TYPE &amp; GEOMETRY</span><span class="sec-line"></span><span class="sec-dot"></span></div>
+    <h2>两套字体，一条网格</h2>
+    <p class="lead">界面用系统无衬线（锐利、零加载），<b>元数据用等宽</b>（对齐、机器感、档案感），正文用衬线（书感）。等宽层是 v2 新增的第三套字体角色——它不参与叙事，只负责"编目"。</p>
+
+    <div style="margin-top:20px;background:var(--c-surface);border:1px solid var(--c-rule);border-radius:var(--r-panel);padding:6px 20px">
+      <div class="type-row"><span class="m">display / 34 / 800</span><span class="s" style="font-size:34px;font-weight:800;letter-spacing:-1.1px;line-height:1.1">书架</span></div>
+      <div class="type-row"><span class="m">h2 / 22 / 700</span><span class="s" style="font-size:22px;font-weight:700;letter-spacing:-.4px">继续阅读</span></div>
+      <div class="type-row"><span class="m">h3 / 17 / 700</span><span class="s" style="font-size:17px;font-weight:700;letter-spacing:-.3px">雪中悍刀行</span></div>
+      <div class="type-row"><span class="m">body / 13 / 400</span><span class="s" style="font-size:13px;line-height:1.7">点按书卡直接进入阅读，不经过详情页。</span></div>
+      <div class="type-row"><span class="m">meta / 12.5 / mono</span><span class="s" style="font-family:var(--f-mono);font-size:11px;letter-spacing:.7px;color:var(--c-ink-2)">CH.118 / 342 · 2.4 MB · 2026.10.18</span></div>
+      <div class="type-row" style="border-bottom:0"><span class="m">code / 9.5 / mono</span><span class="s" style="font-family:var(--f-mono);font-size:9px;letter-spacing:1.05px;color:var(--c-ink-3);text-transform:uppercase">SHELF · 42 VOL. · SORTED BY LAST READ</span></div>
+    </div>
+
+    <div class="g2" style="margin-top:20px">
+      <div class="note">
+        <h4>字距是这套设计最大的杠杆</h4>
+        <ul>
+          <li>大标题 <b>−1.1px</b>：中文大字在默认字距下会"散"，收紧后立刻有印刷味</li>
+          <li>等宽小字 <b>+1.05px</b>：全大写拉丁 + 宽字距 = 档案标签的通用语言</li>
+          <li>正文 <b>0</b>：中文正文绝不加字距，行高 1.9–1.95 承担呼吸</li>
+          <li>字重只用 400 / 500 / 600 / 700 / 800 五档，不用 300（细体在 125% 缩放下会糊）</li>
+        </ul>
+      </div>
+      <div class="note">
+        <h4>几何：4pt 网格 + 3px 倒角</h4>
+        <ul>
+          <li>间距只用 <b>4 / 8 / 12 / 16 / 24 / 32 / 48 / 64</b>，桌面大区块用 40 / 56</li>
+          <li>圆角：标签 2px、书封/按钮 3px、面板 4px、对话框 6px。<b>不使用 8px 以上</b></li>
+          <li>描边统一 <b>1px</b>（不用 0.5px——125% 缩放下会消失成灰边）</li>
+          <li>套准标记：7px L 形、0.7px 线，只在输入框聚焦、封面悬停、空状态框出现</li>
+        </ul>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;border:1px solid var(--c-rule);background:var(--c-surface);border-radius:var(--r-panel);padding:22px;position:relative">
+      <p style="font-family:var(--f-mono);font-size:8.5px;letter-spacing:1.05px;color:var(--c-ink-3);margin-bottom:14px">SIGNATURE · REGISTRATION MARKS</p>
+      <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:center">
+        <div style="position:relative;width:180px;height:44px;border:1px solid var(--c-ink);border-radius:3px;display:flex;align-items:center;padding:0 12px">
+          <span style="font-size:12.5px;color:var(--c-ink-3)">搜索书名或作者</span>
+          <span class="reg tl" style="opacity:1;top:-4px;left:-4px"></span><span class="reg tr" style="opacity:1;top:-4px;right:-4px"></span>
+          <span class="reg bl" style="opacity:1;bottom:-4px;left:-4px"></span><span class="reg br" style="opacity:1;bottom:-4px;right:-4px"></span>
+        </div>
+        <div style="flex:1;min-width:260px">
+          <p style="font-size:12.5px;line-height:1.8;color:var(--c-ink-2)">四角 L 形套准线是整套设计里唯一的"装饰"，也是最省成本的身份标记。规则：<b>只在"被聚焦/被选中"的矩形上出现</b>，静止态永不出现。它替代了 v1 的 ring 高亮（外发光），不会在小尺寸下糊成一团。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 04 组件 ═══ -->
+  <section class="sec" id="s4">
+    <div class="sec-meta"><span class="sec-code">04 — COMPONENTS</span><span class="sec-line"></span><span class="sec-dot"></span></div>
+    <h2>组件：方、薄、有边</h2>
+    <p class="lead">所有组件遵循三条：<b>方</b>（3–4px 倒角）、<b>薄</b>（高度 34/40，无内阴影）、<b>有边</b>（默认带 1px 描边，不靠背景色区分）。图标一律 Lucide 线性 2px，禁止 emoji（沿用 v1 硬性规定）。</p>
+
+    <div style="margin-top:20px;background:var(--c-surface);border:1px solid var(--c-rule);border-radius:var(--r-panel);padding:0 22px">
+      <div class="spec-row">
+        <span class="k">BUTTON / PRIMARY</span>
+        <div class="v">
+          <button class="btn btn-primary"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M12 7v6"/><path d="M9 10h6"/></svg>导入 TXT</button>
+          <button class="btn btn-primary btn-lg">继续阅读</button>
+          <button class="btn btn-primary" style="opacity:.42;pointer-events:none">导入中…</button>
+        </div>
+      </div>
+      <div class="spec-row">
+        <span class="k">BUTTON / GHOST · QUIET</span>
+        <div class="v">
+          <button class="btn btn-ghost">取消</button>
+          <button class="btn btn-quiet">全部标为已读</button>
+          <button class="btn btn-ghost btn-sm">删除</button>
+        </div>
+      </div>
+      <div class="spec-row">
+        <span class="k">ICON BUTTON</span>
+        <div class="v">
+          <button class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+          <button class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+          <button class="ico on"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></button>
+          <span style="font-family:var(--f-mono);font-size:9px;color:var(--c-ink-3)">34×34 桌面 / 44×44 触屏</span>
+        </div>
+      </div>
+      <div class="spec-row">
+        <span class="k">SEARCH / INPUT</span>
+        <div class="v">
+          <div class="srch" style="width:240px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input placeholder="搜索书名或作者" aria-label="示例搜索">
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="tag">1px 描边</span><span class="tag">聚焦 → 套准线</span>
+          </div>
+        </div>
+      </div>
+      <div class="spec-row">
+        <span class="k">SEGMENTED</span>
+        <div class="v">
+          <div class="seg">
+            <button class="on"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></button>
+            <button><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+          </div>
+          <div class="seg" style="height:30px">
+            <button class="on" style="width:auto;padding:0 12px;font-size:11.5px;height:24px">单页</button>
+            <button style="width:auto;padding:0 12px;font-size:11.5px;height:24px">滚动</button>
+          </div>
+        </div>
+      </div>
+      <div class="spec-row">
+        <span class="k">SLIDER</span>
+        <div class="v" style="flex:1">
+          <div style="display:flex;align-items:center;gap:14px;width:100%;max-width:420px">
+            <div style="flex:1;position:relative;height:2px;background:var(--c-rule)">
+              <div style="position:absolute;left:0;top:0;bottom:0;width:62%;background:var(--c-ink)"></div>
+              <div style="position:absolute;left:62%;top:-6px;width:14px;height:14px;margin-left:-7px;background:var(--c-milk);border:1.5px solid var(--c-ink)"></div>
+            </div>
+            <span style="font-family:var(--f-mono);font-size:10.5px;width:44px;text-align:right;color:var(--c-ink-2)">20 px</span>
+          </div>
+          <span style="font-family:var(--f-mono);font-size:9px;color:var(--c-ink-3)">轨道 2px · 滑块为方形 14px，不是圆点</span>
+        </div>
+      </div>
+      <div class="spec-row">
+        <span class="k">TAG / CHIP</span>
+        <div class="v">
+          <span class="tag">TXT</span>
+          <span class="tag solid">已读 42%</span>
+          <span class="tag acc">当前章</span>
+          <span class="tag">2.4 MB</span>
+        </div>
+      </div>
+      <div class="spec-row" style="border-bottom:0">
+        <span class="k">TOAST</span>
+        <div class="v">
+          <div class="toast"><span class="bar"></span>已导入《雪中悍刀行》</div>
+          <div class="toast" style="background:var(--c-accent)"><span class="bar" style="background:var(--c-milk)"></span>导入失败：文件编码无法识别</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="font-size:15px;font-weight:700;margin:34px 0 12px;letter-spacing:-.2px">书卡两态</h3>
+    <div class="g2">
+      <div class="note" style="padding:20px">
+        <p style="font-family:var(--f-mono);font-size:8.5px;letter-spacing:1.05px;color:var(--c-ink-3);margin-bottom:18px">GRID · 立体书（书架主形态）</p>
+        <div style="display:flex;gap:26px;align-items:flex-end;justify-content:center;padding:14px 0 20px">
+          <div class="bk" style="--c1:#6B7A6B;--c2:#46534A">
+            <div class="bk-top"></div><div class="bk-spine"></div>
+            <div class="bk-face"><span class="bk-code">WJ-000118</span><span class="bk-title">雪中悍刀行</span><span class="bk-prog" style="width:42%"></span></div>
+            <div class="bk-shadow"></div>
+          </div>
+          <div class="bk" style="--c1:#8C7660;--c2:#5E4B3B">
+            <div class="bk-top"></div><div class="bk-spine"></div>
+            <div class="bk-face"><span class="bk-code">WJ-000119</span><span class="bk-title">剑来</span><span class="bk-prog" style="width:8%"></span></div>
+            <div class="bk-shadow"></div>
+          </div>
+        </div>
+        <p style="font-size:12px;line-height:1.75;color:var(--c-ink-2)">封面内印：顶部编号、竖排书名、底部朱砂进度线。<b>书架外部不再有文字标签</b>——真实书架的书名就印在书上，这让墙面干净一半。</p>
+      </div>
+      <div class="note" style="padding:20px">
+        <p style="font-family:var(--f-mono);font-size:8.5px;letter-spacing:1.05px;color:var(--c-ink-3);margin-bottom:14px">LIST · 工具型视图（等宽元数据主导）</p>
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <div style="display:flex;align-items:center;gap:12px;height:52px;padding:0 8px;border-bottom:1px solid var(--c-rule)">
+            <div style="width:26px;height:36px;border-radius:2px;background:linear-gradient(158deg,#6B7A6B,#46534A);box-shadow:inset 0 0 0 .5px rgb(0 0 0/.14);flex:none"></div>
+            <div style="flex:1;min-width:0"><p style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">雪中悍刀行</p>
+              <p style="font-family:var(--f-mono);font-size:9px;letter-spacing:.5px;color:var(--c-ink-3);margin-top:3px">WJ-000118 · 342 CH.</p></div>
+            <div style="width:60px"><div style="height:2px;background:var(--c-rule);position:relative"><i style="position:absolute;left:0;top:0;bottom:0;width:42%;background:var(--c-accent);display:block"></i></div>
+              <p style="font-family:var(--f-mono);font-size:8.5px;color:var(--c-ink-3);margin-top:4px;text-align:right">42%</p></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;height:52px;padding:0 8px;border-bottom:1px solid var(--c-rule)">
+            <div style="width:26px;height:36px;border-radius:2px;background:linear-gradient(158deg,#8C7660,#5E4B3B);box-shadow:inset 0 0 0 .5px rgb(0 0 0/.14);flex:none"></div>
+            <div style="flex:1;min-width:0"><p style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">剑来</p>
+              <p style="font-family:var(--f-mono);font-size:9px;letter-spacing:.5px;color:var(--c-ink-3);margin-top:3px">WJ-000119 · 1108 CH.</p></div>
+            <div style="width:60px"><div style="height:2px;background:var(--c-rule);position:relative"><i style="position:absolute;left:0;top:0;bottom:0;width:8%;background:var(--c-accent);display:block"></i></div>
+              <p style="font-family:var(--f-mono);font-size:8.5px;color:var(--c-ink-3);margin-top:4px;text-align:right">8%</p></div>
+          </div>
+        </div>
+        <p style="font-size:12px;line-height:1.75;color:var(--c-ink-2);margin-top:14px">行高 52px，无卡片、无阴影、无圆角，只有分隔线。桌面一次能看 14 本——这是"找书"场景的效率形态。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 05 桌面书架 ═══ -->
+  <section class="sec" id="s5">
+    <div class="sec-meta"><span class="sec-code">05 — SHELF / DESKTOP 1440×900</span><span class="sec-line"></span><span class="sec-dot"></span></div>
+    <h2>书架：一堵有厚度的墙</h2>
+    <p class="lead">侧栏承担导航与"最近在读"，主区只放两件事：<b>继续阅读</b>和<b>书墙</b>。书墙每行一根贯通的搁板，书的右侧有真实书脊（等轴测 14px 厚），底部落在板上并投一道极浅的影。封面外不再挂文字标签——书名印在封面上，墙就干净了。</p>
+
+    <div class="stage" style="--k:.68;margin-top:26px">
+      <div class="screen">
+        <div class="app">
+          <!-- 侧栏 -->
+          <aside class="rail">
+            <div class="rail-brand">
+              <div class="rail-logo">WJ</div>
+              <div class="rail-name">简阅<span class="en">PLAINREAD</span></div>
+            </div>
+            <nav class="rail-nav">
+              <button class="rail-item on">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                书架<span class="ct">42</span>
+              </button>
+              <button class="rail-item">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>
+                设置
+              </button>
+            </nav>
+
+            <div class="rail-sub">
+              <div class="rail-sub-h"><span>RECENT</span><span></span></div>
+              <div class="recent">
+                <button class="recent-item"><div class="recent-thumb" style="background:linear-gradient(158deg,#6B7A6B,#46534A)"><i style="width:42%"></i></div>
+                  <div class="recent-t"><b>雪中悍刀行</b><em>42% · CH.118</em></div></button>
+                <button class="recent-item"><div class="recent-thumb" style="background:linear-gradient(158deg,#8C7660,#5E4B3B)"><i style="width:8%"></i></div>
+                  <div class="recent-t"><b>剑来</b><em>8% · CH.091</em></div></button>
+                <button class="recent-item"><div class="recent-thumb" style="background:linear-gradient(158deg,#6A7688,#414B5C)"><i style="width:67%"></i></div>
+                  <div class="recent-t"><b>凡人修仙传</b><em>67% · CH.1503</em></div></button>
+              </div>
+            </div>
+
+            <div class="rail-sub">
+              <div class="rail-sub-h"><span>INDEX</span><span></span></div>
+              <div class="rail-grid">
+                <div class="rail-cell"><b>42</b><span>册藏书</span></div>
+                <div class="rail-cell"><b>3</b><span>在读</span></div>
+                <div class="rail-cell"><b>12</b><span>已读完</span></div>
+                <div class="rail-cell"><b>2.4</b><span>GB 占用</span></div>
+              </div>
+            </div>
+
+            <div class="rail-foot">
+              <span>PLAINREAD v1.0.0 · OFFLINE</span>
+              <span>LAST SYNC 2026.10.18 09:41</span>
+            </div>
+          </aside>
+
+          <!-- 主区 -->
+          <div class="main">
+            <div class="phead">
+              <div class="phead-l">
+                <p class="kick">SHELF / 42 VOL. <s></s> SORTED BY LAST READ</p>
+                <h1>书架</h1>
+              </div>
+              <div class="phead-r">
+                <div class="srch">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                  <input placeholder="搜索书名或作者" aria-label="搜索书架">
+                  <kbd>⌘K</kbd>
+                  <span class="reg tl"></span><span class="reg tr"></span><span class="reg bl"></span><span class="reg br"></span>
+                </div>
+                <div class="seg" role="group" aria-label="视图切换">
+                  <button class="on" aria-label="网格视图"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></button>
+                  <button aria-label="列表视图"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+                </div>
+                <button class="btn btn-primary">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M12 7v6"/><path d="M9 10h6"/></svg>
+                  导入
+                </button>
+              </div>
+            </div>
+
+            <!-- 继续阅读 -->
+            <div class="resume">
+              <div class="resume-cover" style="background:linear-gradient(158deg,#6B7A6B,#46534A)"></div>
+              <div class="resume-mid">
+                <p class="resume-k"><i></i>继续阅读</p>
+                <h3>雪中悍刀行</h3>
+                <div class="resume-meta">
+                  <span>CH.118 / 342</span>
+                  <div class="resume-bar"><i style="width:42%"></i></div>
+                  <span>剩余 224 章</span>
+                </div>
+              </div>
+              <div class="resume-right">
+                <div style="text-align:right">
+                  <div class="resume-pct">42<small>%</small></div>
+                  <div style="font-family:var(--f-mono);font-size:8px;letter-spacing:.8px;color:var(--c-ink-3);margin-top:2px">READ</div>
+                </div>
+                <button class="btn btn-primary btn-lg">打开</button>
+              </div>
+            </div>
+
+            <!-- 书墙 -->
+            <div class="wall">
+              <div class="wall-inner">
+                <div class="wall-head"><span class="c">ALL VOLUMES / 42</span><span class="l"></span><span class="d"></span></div>
+
+                <div class="row-wrap">
+                  <div class="row">
+                    <div class="bk" style="--c1:#6B7A6B;--c2:#46534A"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-000118</span><span class="bk-title">雪中悍刀行</span><span class="bk-prog" style="width:42%"></span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#8C7660;--c2:#5E4B3B"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-000091</span><span class="bk-title">剑来</span><span class="bk-prog" style="width:8%"></span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#6A7688;--c2:#414B5C"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-000204</span><span class="bk-title">凡人修仙传</span><span class="bk-prog" style="width:67%"></span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#8A6565;--c2:#5B3F3F"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-000311</span><span class="bk-title">诡秘之主</span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#77805C;--c2:#4E5538"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-000402</span><span class="bk-title">大奉打更人</span><span class="bk-prog" style="width:23%"></span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#7C7189;--c2:#4E4659"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-000517</span><span class="bk-title">庆余年</span><span class="bk-prog" style="width:91%"></span></div><div class="bk-shadow"></div></div>
+                  </div>
+                  <div class="plank"></div>
+                </div>
+
+                <div class="row-wrap">
+                  <div class="row">
+                    <div class="bk" style="--c1:#8C7660;--c2:#5E4B3B"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-000033</span><span class="bk-title">赘婿</span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#77805C;--c2:#4E5538"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-000626</span><span class="bk-title">牧神记</span><span class="bk-prog" style="width:55%"></span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#6A7688;--c2:#414B5C"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-000702</span><span class="bk-title">深空彼岸</span><span class="bk-prog" style="width:12%"></span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#8A6565;--c2:#5B3F3F"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-000811</span><span class="bk-title">赤心巡天</span><span class="bk-prog" style="width:78%"></span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#6B7A6B;--c2:#46534A"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-000904</span><span class="bk-title">长夜余火</span><span class="bk-prog" style="width:34%"></span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#7C7189;--c2:#4E4659"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-001007</span><span class="bk-title">夜的命名术</span><span class="bk-prog" style="width:3%"></span></div><div class="bk-shadow"></div></div>
+                  </div>
+                  <div class="plank"></div>
+                </div>
+
+                <div class="row-wrap">
+                  <div class="row">
+                    <div class="bk" style="--c1:#6B7A6B;--c2:#46534A"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-001102</span><span class="bk-title">诡秘地海</span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#8C7660;--c2:#5E4B3B"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-001218</span><span class="bk-title">万相之王</span><span class="bk-prog" style="width:47%"></span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#6A7688;--c2:#414B5C"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-001305</span><span class="bk-title">择日飞升</span><span class="bk-prog" style="width:19%"></span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#8A6565;--c2:#5B3F3F"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-001411</span><span class="bk-title">大道朝天</span><span class="bk-prog" style="width:86%"></span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#77805C;--c2:#4E5538"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-001502</span><span class="bk-title">宿命之环</span><span class="bk-prog" style="width:5%"></span></div><div class="bk-shadow"></div></div>
+                    <div class="bk" style="--c1:#7C7189;--c2:#4E4659"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code">WJ-001620</span><span class="bk-title">剑来·终章</span></div><div class="bk-shadow"></div></div>
+                  </div>
+                  <div class="plank"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cap"><span class="n">05.1</span><span class="x"><b>为什么书墙要"立体"</b>：平面网格里每本书都是一张色卡；加了书脊厚度与落影之后，它才开始像"被放在板上的东西"。参数取自参考项目的等轴测投影——<b>书脊厚 = 封面宽 × 11.7%</b>、顶面抬升 = 书脊厚 × 0.457，任何尺寸下比例恒定，缩到手机也不会变形。</span></div>
+    <div class="cap" style="margin-top:6px"><span class="n">05.2</span><span class="x"><b>末行搁板压住视口底边</b>是刻意的"未完成感"——书墙应当看起来还在往下延伸。滚动时整墙平移，搁板随行。</span></div>
+  </section>
+
+  <!-- ═══ 06 阅读页 ═══ -->
+  <section class="sec" id="s6">
+    <div class="sec-meta"><span class="sec-code">06 — READER / DESKTOP</span><span class="sec-line"></span><span class="sec-dot"></span></div>
+    <h2>阅读页：正文 620px 是硬上限</h2>
+    <p class="lead">v1 在 1440 宽的窗口里让正文跑满视口，一行能排 70–80 字——中文长行会导致<b>换行丢行</b>，是阅读体验最致命的细节。v2 把正文列宽锁在 <b>620px（约 31 字/行）</b>，两侧留白交给"舞台"。桌面把目录做成常驻右栏（可 Ctrl+B 收起），手机仍是抽屉。</p>
+
+    <div class="stage" style="--k:.68;margin-top:26px">
+      <div class="screen">
+        <div class="rd">
+          <div class="rd-main">
+            <!-- 顶栏（桌面：鼠标移到顶部 80px 内淡入） -->
+            <div class="rd-top">
+              <button class="rd-ico" aria-label="返回书架"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg></button>
+              <span class="bk-t">雪中悍刀行</span>
+              <span class="bk-m">CH.118 / 342</span>
+              <span class="sp"></span>
+              <button class="rd-ico" aria-label="添加书签"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></button>
+              <button class="rd-ico on" aria-label="目录"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+              <button class="rd-ico" aria-label="排版设置"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg></button>
+            </div>
+
+            <!-- 正文 -->
+            <div class="rd-body">
+              <div class="rd-col">
+                <div class="rd-ch">
+                  <span class="k">CHAPTER 007 · 第一卷 白马出凉州</span>
+                  <h2>夜宿听雪楼</h2>
+                  <div class="r"></div>
+                </div>
+                <article class="rd-art">
+                  <p>风从长街尽头卷过来，带着雪粒和铁锈的味道。他把手拢进袖子里，慢慢往前走。</p>
+                  <p>街两旁的灯一盏接一盏亮起来，像有人沿着屋檐数数。数到第七盏时，他停下来，抬头看了一眼招牌。招牌上的字已经褪成灰白，只有最末一笔还留着当年的金漆。</p>
+                  <p>“还开着？”他问。</p>
+                  <p>没人回答。门槛上积着薄薄一层雪，雪面平整，没有脚印。他伸手推门，门轴发出一声很长的呻吟。</p>
+                  <p>屋里比外面更暗。柜台后坐着一个老人，正在擦一只瓷碗。碗是空的，擦得很仔细，一圈一圈，像在磨一面镜子。</p>
+                  <p>“要住店？”</p>
+                  <p>“要一间。”他把行囊放在脚边，“靠里那间。”</p>
+                  <p>老人抬头看了他一眼，眼里没有惊讶，也没有盘问。这样的客人他见得多了，来的时候不说来路，走的时候不留姓名。</p>
+                </article>
+              </div>
+            </div>
+
+            <div class="rd-pg">12 / 34</div>
+
+            <!-- 底部工具条 -->
+            <div class="rd-dock">
+              <div class="tr"><i style="width:34%"></i><u></u></div>
+              <span class="cnt">42%</span>
+              <span class="dv"></span>
+              <div style="display:flex;gap:7px;align-items:center">
+                <span class="dot" style="background:#F4F0E6"></span>
+                <span class="dot on" style="background:#FDFCFA"></span>
+                <span class="dot" style="background:#191919"></span>
+              </div>
+              <span class="dv"></span>
+              <div class="rd-aa"><button aria-label="减小字号">A−</button><span class="v">19.5</span><button aria-label="增大字号">A+</button></div>
+              <span class="dv"></span>
+              <button class="rd-ico" aria-label="书签列表"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></button>
+            </div>
+          </div>
+
+          <!-- 目录栏 -->
+          <aside class="rd-toc">
+            <div class="toc-h">
+              <div><h3>目录</h3><span class="k">CONTENTS · 342 CH.</span></div>
+              <button class="rd-ico" aria-label="收起目录"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+            </div>
+            <div class="toc-list">
+              <div class="toc-g"><span>第一卷 白马出凉州</span><i></i></div>
+              <div class="toc-i done"><span class="n">01</span>我以我血荐轩辕</div>
+              <div class="toc-i done"><span class="n">02</span>春神湖上</div>
+              <div class="toc-i done"><span class="n">03</span>白马出凉州</div>
+              <div class="toc-i done"><span class="n">04</span>天下第一</div>
+              <div class="toc-i done"><span class="n">05</span>大雪坪</div>
+              <div class="toc-i done"><span class="n">06</span>青鸟</div>
+              <div class="toc-i on"><span class="n">07</span>夜宿听雪楼</div>
+              <div class="toc-i"><span class="n">08</span>一只空碗</div>
+              <div class="toc-i"><span class="n">09</span>雪夜访客</div>
+              <div class="toc-i"><span class="n">10</span>刀出鞘</div>
+              <div class="toc-g"><span>第二卷 孤身入北莽</span><i></i></div>
+              <div class="toc-i"><span class="n">11</span>北行</div>
+              <div class="toc-i"><span class="n">12</span>白骨累累</div>
+              <div class="toc-i"><span class="n">13</span>一骑当千</div>
+              <div class="toc-i"><span class="n">14</span>草原上的月亮</div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <div class="cap"><span class="n">06.1</span><span class="x"><b>页码格式变了</b>：从「12 / 34」到 <span style="font-family:var(--f-mono);font-size:11px">12 / 34</span> 等宽 + 字距 0.9，与大号衬线标题形成"印刷页脚"对照。章节名上方加了 <b>CHAPTER 007 · 卷名</b> 一行等宽小字——它替代 v1 的纯标题，给了页面一个"书籍结构"的锚。</span></div>
+    <div class="cap" style="margin-top:6px"><span class="n">06.2</span><span class="x"><b>底部工具条是浮层，不占正文高度</b>：呼出时正文<b>不重排</b>（v1 已定铁律，继续遵守）。桌面端鼠标移开 1.2s 后自动淡出；触屏端仍靠点击中央切换。</span></div>
+    <div class="cap" style="margin-top:6px"><span class="n">06.3</span><span class="x"><b>目录右栏</b>默认展开（桌面首次进入后记忆状态）；宽 320px，与书墙的 40px 内边距对齐。当前章：朱砂 2px 左条 + 淡朱砂底 + 编号变朱砂——三重信号，不靠加粗一项。</span></div>
+  </section>
+
+  <!-- ═══ 07 设置与状态 ═══ -->
+  <section class="sec" id="s7">
+    <div class="sec-meta"><span class="sec-code">07 — SETTINGS &amp; STATES</span><span class="sec-line"></span><span class="sec-dot"></span></div>
+    <h2>设置：两层，两种密度</h2>
+    <p class="lead">阅读设置仍是浮层（贴在阅读页右上，改动即时预览）；全局设置是独立页。两者共用同一套"标签列 + 控件列"的两栏行式布局——桌面横着排，信息密度高，且不需要卡片。</p>
+
+    <div style="margin-top:26px">
+      <div>
+        <div class="stage local" style="--k:.92;--sw:420px;--sh:560px;margin:0">
+          <div class="screen" style="border-radius:6px">
+            <div class="prefs">
+              <div class="prefs-h">
+                <div><h4>排版</h4><span class="k">READING · THIS BOOK</span></div>
+                <button class="rd-ico" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+              </div>
+              <div class="prefs-b">
+                <div class="prefs-r"><span class="lb">字号</span>
+                  <div class="ctl"><div class="sl"><i style="width:46%"></i><u style="left:46%"></u></div></div>
+                  <span class="vl">19.5</span></div>
+                <div class="prefs-r"><span class="lb">行距</span>
+                  <div class="ctl"><div class="sl"><i style="width:62%"></i><u style="left:62%"></u></div></div>
+                  <span class="vl">1.95</span></div>
+                <div class="prefs-r"><span class="lb">页边距</span>
+                  <div class="ctl"><div class="sl"><i style="width:38%"></i><u style="left:38%"></u></div></div>
+                  <span class="vl">32</span></div>
+                <div class="prefs-r"><span class="lb">段距</span>
+                  <div class="ctl"><div class="sl"><i style="width:55%"></i><u style="left:55%"></u></div></div>
+                  <span class="vl">0.55</span></div>
+                <div class="prefs-r"><span class="lb">字体</span>
+                  <div class="ctl" style="justify-content:flex-end">
+                    <div class="seg" style="height:28px">
+                      <button class="on" style="width:auto;padding:0 11px;font-size:11px;height:24px">宋体</button>
+                      <button style="width:auto;padding:0 11px;font-size:11px;height:24px">黑体</button>
+                    </div>
+                  </div><span class="vl" style="width:auto"></span></div>
+                <div class="prefs-r" style="border-bottom:0"><span class="lb">翻页</span>
+                  <div class="ctl" style="justify-content:flex-end">
+                    <div class="seg" style="height:28px">
+                      <button class="on" style="width:auto;padding:0 11px;font-size:11px;height:24px">点击</button>
+                      <button style="width:auto;padding:0 11px;font-size:11px;height:24px">滚动</button>
+                    </div>
+                  </div><span class="vl" style="width:auto"></span></div>
+                <div class="prefs-r" style="border-bottom:0;align-items:flex-start"><span class="lb">主题</span>
+                  <div class="ctl" style="gap:9px;justify-content:flex-end">
+                    <span class="dot" style="width:22px;height:22px;background:#F4F0E6"></span>
+                    <span class="dot on" style="width:22px;height:22px;background:#FDFCFA"></span>
+                    <span class="dot" style="width:22px;height:22px;background:#191919"></span>
+                  </div><span class="vl" style="width:auto"></span></div>
+              </div>
+              <div class="prefs-f">
+                <p style="font-family:var(--f-mono);font-size:7.5px;letter-spacing:1.05px;color:var(--c-ink-3);margin-bottom:7px">LIVE PREVIEW</p>
+                <div class="pv">风从长街尽头卷过来，带着雪粒和铁锈的味道。他把手拢进袖子里，慢慢往前走。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="cap" style="margin-top:10px"><span class="n">07.1</span><span class="x" style="max-width:420px">阅读设置浮层 420×560。滑杆改为<b>2px 轨道 + 方形滑块</b>；数值等宽右对齐，拖动时数字不抖动。</span></div>
+      </div>
+
+      <div style="margin-top:36px">
+        <div class="stage" style="--k:.68">
+          <div class="screen">
+            <div class="app">
+              <aside class="rail">
+                <div class="rail-brand"><div class="rail-logo">WJ</div><div class="rail-name">简阅<span class="en">PLAINREAD</span></div></div>
+                <nav class="rail-nav">
+                  <button class="rail-item"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>书架<span class="ct">42</span></button>
+                  <button class="rail-item on"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>设置</button>
+                </nav>
+                <div class="rail-sub"><div class="rail-sub-h"><span>INDEX</span><span></span></div>
+                  <div class="rail-grid">
+                    <div class="rail-cell"><b>42</b><span>册藏书</span></div>
+                    <div class="rail-cell"><b>3</b><span>在读</span></div>
+                    <div class="rail-cell"><b>12</b><span>已读完</span></div>
+                    <div class="rail-cell"><b>2.4</b><span>GB 占用</span></div>
+                  </div>
+                </div>
+                <div class="rail-foot"><span>PLAINREAD v1.0.0 · OFFLINE</span></div>
+              </aside>
+              <div class="main">
+                <div class="phead">
+                  <div class="phead-l"><p class="kick">SETTINGS / GLOBAL DEFAULTS</p><h1>设置</h1></div>
+                  <div class="phead-r"><span class="tag">本地 · 无账号</span></div>
+                </div>
+                <div class="set-scroll">
+                  <div class="set-col">
+                    <div class="set-g">
+                      <div class="gk-wrap"><span class="gk">01 / READING</span><h4>阅读默认值</h4><p class="d">新书首次打开时采用的排版参数，每本书可单独覆盖。</p></div>
+                      <div>
+                        <div class="set-row"><span class="t">默认字号</span><span class="v">20 px</span></div>
+                        <div class="set-row"><span class="t">默认行距</span><span class="v">1.95</span></div>
+                        <div class="set-row"><span class="t">正文默认字体</span><span class="v">宋体</span></div>
+                        <div class="set-row"><span class="t">翻页方式</span><span class="v">点击分区</span></div>
+                      </div>
+                    </div>
+                    <div class="set-g">
+                      <div><span class="gk">02 / APPEARANCE</span><h4>外观</h4><p class="d">界面与阅读区共用同一套明暗状态。</p></div>
+                      <div>
+                        <div class="set-row"><span class="t">阅读主题</span>
+                          <div style="display:flex;gap:8px;align-items:center">
+                            <span class="dot" style="width:20px;height:20px;background:#F4F0E6"></span>
+                            <span class="dot on" style="width:20px;height:20px;background:#FDFCFA"></span>
+                            <span class="dot" style="width:20px;height:20px;background:#191919"></span>
+                          </div></div>
+                        <div class="set-row"><span class="t">跟随系统深色<span class="s">系统切换时自动换主题</span></span>
+                          <div style="width:30px;height:16px;background:var(--c-ink);border-radius:999px;position:relative"><i style="position:absolute;right:2px;top:2px;width:12px;height:12px;background:var(--c-milk);border-radius:50%;display:block"></i></div></div>
+                        <div class="set-row"><span class="t">翻页动画<span class="s">关闭后为瞬时切换，省电</span></span>
+                          <div style="width:30px;height:16px;background:var(--c-rule-2);border-radius:999px;position:relative"><i style="position:absolute;left:2px;top:2px;width:12px;height:12px;background:var(--c-milk);border-radius:50%;display:block"></i></div></div>
+                      </div>
+                    </div>
+                    <div class="set-g">
+                      <div><span class="gk">03 / DATA</span><h4>数据</h4><p class="d">全部保存在本机，不联网、不上传。</p></div>
+                      <div>
+                        <div class="set-row"><span class="t">书籍占用<span class="s">42 册 · 含进度与书签</span></span><span class="v">2.38 GB</span></div>
+                        <div class="set-row"><span class="t">章节缓存<span class="s">最近预取的章节文本</span></span><span class="v">18.4 MB</span></div>
+                        <div class="set-row"><span class="t">清空缓存</span><button class="btn btn-ghost btn-sm">清理</button></div>
+                      </div>
+                    </div>
+                    <div class="set-g">
+                      <div><span class="gk">04 / ABOUT</span><h4>关于</h4><p class="d">纯本地阅读器，无广告、无账号。</p></div>
+                      <div>
+                        <div class="set-row"><span class="t">版本</span><span class="v">1.0.0 (build 1)</span></div>
+                        <div class="set-row"><span class="t">开源许可</span><span class="v">MIT · Lucide ISC</span></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="cap" style="margin-top:10px"><span class="n">07.2</span><span class="x" style="max-width:520px">全局设置页。四组用编号 <b>01 / 02 / 03 / 04</b> + 细线分隔，不做卡片；每行 44px，桌面一屏可看完全部设置——这是桌面端相对手机唯一该有的"特权"。</span></div>
+      </div>
+    </div>
+
+    <h3 style="font-size:15px;font-weight:700;margin:38px 0 14px;letter-spacing:-.2px">三种边界状态</h3>
+    <div class="g3">
+      <div>
+        <div class="stage local" style="--k:.9;--sw:360px;--sh:268px">
+          <div class="screen" style="border-radius:4px;border:0;background:var(--c-canvas)">
+            <div class="blank">
+              <span class="reg tl" style="opacity:.65;top:5px;left:5px"></span><span class="reg tr" style="opacity:.65;top:5px;right:5px"></span>
+              <span class="reg bl" style="opacity:.65;bottom:5px;left:5px"></span><span class="reg br" style="opacity:.65;bottom:5px;right:5px"></span>
+              <div style="width:54px;height:76px;border:1px dashed var(--c-rule-2);border-radius:2px;display:grid;place-items:center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink-3)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              </div>
+              <h4>书架尚空</h4>
+              <p>导入一个 TXT 文件开始。也可以从系统「打开方式」直接送进来。</p>
+              <button class="btn btn-primary">导入第一本书</button>
+            </div>
+          </div>
+        </div>
+        <div class="cap"><span class="n">A</span><span class="x">空态。虚线套准框 + 衬线标题。<b>不解释功能</b>，只给一个动作。</span></div>
+      </div>
+
+      <div>
+        <div class="stage local" style="--k:.9;--sw:360px;--sh:268px">
+          <div class="screen" style="border-radius:4px;border:0;background:var(--c-canvas)">
+            <div style="padding:26px 22px;height:100%;display:flex;flex-direction:column;justify-content:center">
+              <p style="font-family:var(--f-mono);font-size:8px;letter-spacing:1.05px;color:var(--c-ink-3)">IMPORTING · 3 / 12</p>
+              <p style="font-size:13.5px;font-weight:600;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">剑来.txt</p>
+              <div style="margin-top:12px;height:2px;background:var(--c-rule);position:relative">
+                <i style="position:absolute;left:0;top:0;bottom:0;width:25%;background:var(--c-accent);display:block"></i>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-top:8px">
+                <span style="font-family:var(--f-mono);font-size:8.5px;letter-spacing:.5px;color:var(--c-ink-3)">1.2 MB / 4.8 MB</span>
+                <span style="font-family:var(--f-mono);font-size:8.5px;letter-spacing:.5px;color:var(--c-ink-3)">⏎ 取消</span>
+              </div>
+              <div style="margin-top:20px;border-top:1px solid var(--c-rule);padding-top:12px">
+                <div style="display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--c-ink-3)">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  雪中悍刀行 · 已导入
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--c-ink-3);margin-top:6px">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  凡人修仙传 · 已导入
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="cap"><span class="n">B</span><span class="x">导入中。进度 2px 朱砂线 + 等宽体积；已完成项收在下方，给"看得见进展"的踏实感。</span></div>
+      </div>
+
+      <div>
+        <div class="stage local" style="--k:.9;--sw:360px;--sh:268px">
+          <div class="screen" style="border-radius:4px;border:0;background:var(--c-canvas)">
+            <div style="padding:26px 22px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c-accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+              <p style="font-size:13.5px;font-weight:600;margin-top:12px">这本书打不开</p>
+              <p style="font-size:11px;line-height:1.7;color:var(--c-ink-3);margin-top:6px;max-width:24ch">文件编码无法识别，可能不是纯文本。换一个 UTF-8 / GBK 编码的文件试试。</p>
+              <div style="display:flex;gap:8px;margin-top:16px">
+                <button class="btn btn-ghost btn-sm">重新选择</button>
+                <button class="btn btn-quiet btn-sm">删除这本书</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="cap"><span class="n">C</span><span class="x">错误态。给<b>原因</b>和<b>下一步</b>，不是"出错了"。危险动作（删除）走 ghost，不抢主按钮。</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 08 手机端 ═══ -->
+  <section class="sec" id="s8">
+    <div class="sec-meta"><span class="sec-code">08 — MOBILE / 375×812</span><span class="sec-line"></span><span class="sec-dot"></span></div>
+    <h2>手机端：同一套令牌，换一套骨架</h2>
+    <p class="lead">手机不做"缩小的桌面"：侧栏收成底部双标签（1.0 只有书架与设置两屏可达），书墙变 3 列，书脊厚度按比例缩到 10px。颜色、字号阶梯、圆角、编号规则<b>一行不改</b>。</p>
+
+    <div style="display:flex;gap:44px;align-items:flex-start;margin-top:26px;flex-wrap:wrap;justify-content:center">
+      <div>
+        <div class="stage phone">
+          <div class="screen">
+            <div class="ph">
+              <div class="ph-top">
+                <div class="ph-mast">
+                  <div><p class="k">SHELF / 42 VOL.</p><h1>书架</h1></div>
+                  <div class="ph-acts">
+                    <button class="ico" style="width:32px;height:32px" aria-label="导入"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button>
+                    <button class="ico" style="width:32px;height:32px" aria-label="设置"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/></svg></button>
+                  </div>
+                </div>
+                <div class="ph-srch">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink-3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                  <span>搜索书名或作者</span>
+                </div>
+                <div class="ph-resume">
+                  <div class="cv" style="background:linear-gradient(158deg,#6B7A6B,#46534A)"></div>
+                  <div class="m"><p class="k">CONTINUE · 42%</p><h4>雪中悍刀行</h4><div class="b"><i style="width:42%"></i></div></div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--c-ink-3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </div>
+              </div>
+              <div class="ph-wall">
+                <div class="ph-row">
+                  <div class="bk" style="--bw:84px;--c1:#6B7A6B;--c2:#46534A"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code" style="font-size:5px">WJ-000118</span><span class="bk-title" style="font-size:9.5px;letter-spacing:1px;margin-right:8px">雪中悍刀行</span><span class="bk-prog" style="width:42%"></span></div><div class="bk-shadow"></div></div>
+                  <div class="bk" style="--bw:84px;--c1:#8C7660;--c2:#5E4B3B"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code" style="font-size:5px">WJ-000091</span><span class="bk-title" style="font-size:9.5px;letter-spacing:1px;margin-right:8px">剑来</span><span class="bk-prog" style="width:8%"></span></div><div class="bk-shadow"></div></div>
+                  <div class="bk" style="--bw:84px;--c1:#6A7688;--c2:#414B5C"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code" style="font-size:5px">WJ-000204</span><span class="bk-title" style="font-size:9.5px;letter-spacing:1px;margin-right:8px">凡人修仙传</span><span class="bk-prog" style="width:67%"></span></div><div class="bk-shadow"></div></div>
+                </div>
+                <div class="ph-plank"></div>
+                <div class="ph-row">
+                  <div class="bk" style="--bw:84px;--c1:#8A6565;--c2:#5B3F3F"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code" style="font-size:5px">WJ-000311</span><span class="bk-title" style="font-size:9.5px;letter-spacing:1px;margin-right:8px">诡秘之主</span></div><div class="bk-shadow"></div></div>
+                  <div class="bk" style="--bw:84px;--c1:#77805C;--c2:#4E5538"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code" style="font-size:5px">WJ-000402</span><span class="bk-title" style="font-size:9.5px;letter-spacing:1px;margin-right:8px">大奉打更人</span><span class="bk-prog" style="width:23%"></span></div><div class="bk-shadow"></div></div>
+                  <div class="bk" style="--bw:84px;--c1:#7C7189;--c2:#4E4659"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code" style="font-size:5px">WJ-000517</span><span class="bk-title" style="font-size:9.5px;letter-spacing:1px;margin-right:8px">庆余年</span><span class="bk-prog" style="width:91%"></span></div><div class="bk-shadow"></div></div>
+                </div>
+                <div class="ph-plank"></div>
+                <div class="ph-row">
+                  <div class="bk" style="--bw:84px;--c1:#8C7660;--c2:#5E4B3B"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code" style="font-size:5px">WJ-000033</span><span class="bk-title" style="font-size:9.5px;letter-spacing:1px;margin-right:8px">赘婿</span></div><div class="bk-shadow"></div></div>
+                  <div class="bk" style="--bw:84px;--c1:#77805C;--c2:#4E5538"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code" style="font-size:5px">WJ-000626</span><span class="bk-title" style="font-size:9.5px;letter-spacing:1px;margin-right:8px">牧神记</span><span class="bk-prog" style="width:55%"></span></div><div class="bk-shadow"></div></div>
+                  <div class="bk" style="--bw:84px;--c1:#6A7688;--c2:#414B5C"><div class="bk-top"></div><div class="bk-spine"></div><div class="bk-face"><span class="bk-code" style="font-size:5px">WJ-000702</span><span class="bk-title" style="font-size:9.5px;letter-spacing:1px;margin-right:8px">深空彼岸</span><span class="bk-prog" style="width:12%"></span></div><div class="bk-shadow"></div></div>
+                </div>
+                <div class="ph-plank"></div>
+              </div>
+              <div class="ph-tab">
+                <button class="on"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>书架</button>
+                <button><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/></svg>设置</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="cap" style="justify-content:center;text-align:center"><span class="x" style="max-width:280px">手机书架 375×812。同样的 3 行，同样的搁板，只是列数变 3。</span></div>
+      </div>
+
+      <div style="flex:1;min-width:420px;max-width:620px;padding-top:6px">
+        <div class="note" style="margin-bottom:14px">
+          <h4>断点与骨架规则</h4>
+          <table class="t" style="margin-top:10px">
+            <thead><tr><th>宽度</th><th>骨架</th><th>书墙列数</th></tr></thead>
+            <tbody>
+              <tr><td>&lt; 640</td><td>顶部栏 + 底部双标签</td><td>3</td></tr>
+              <tr><td>640–1023</td><td>顶部栏（平板保留）</td><td>4–5</td></tr>
+              <tr><td>1024–1439</td><td>左侧栏 236 + 主区</td><td>5</td></tr>
+              <tr><td>≥ 1440</td><td>左侧栏 236 + 主区（内容 960 居中）</td><td>6</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">
+          <h4>为什么手机不保留侧栏</h4>
+          <p>竖屏上侧栏会吃掉 20% 宽度；而"书架 / 设置"只有两个目的地，底部双标签是正确解。桌面反过来：横向空间过剩、纵向空间昂贵，所以导航竖着放。<b>同源的是令牌，不是骨架。</b></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 09 交互 ═══ -->
+  <section class="sec" id="s9">
+    <div class="sec-meta"><span class="sec-code">09 — INTERACTION</span><span class="sec-line"></span><span class="sec-dot"></span></div>
+    <h2>关键交互：只写会变的部分</h2>
+    <p class="lead">v1 已定的手势与键盘矩阵全部保留（三分区点击、滑动跟手、Esc 层级回退）。这里只列<b>因 v2 造型而必须调整</b>的七处。</p>
+
+    <table class="t" style="margin-top:20px">
+      <thead><tr><th>场景</th><th>v1 行为</th><th>v2 行为</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>书架悬停</td>
+          <td>无（触屏思维）</td>
+          <td>封面 <b>上移 4px</b>，180ms；书脊亮度 +8%，落影加深</td>
+          <td>桌面端鼠标是常态；"书被抽出一点"是最直觉的可点信号，比描边更物理</td>
+        </tr>
+        <tr>
+          <td>顶部栏呼出</td>
+          <td>点中央 40%</td>
+          <td>桌面：鼠标进入顶部 80px 区域即淡入（160ms）；<b>点击中央仍有效</b></td>
+          <td>桌面用户不会想到"点正文中间"；hover 是零学习成本的入口。触屏路径保留</td>
+        </tr>
+        <tr>
+          <td>工具条自动隐藏</td>
+          <td>常驻直到再点中央</td>
+          <td>鼠标离开正文区 1.2s 且未操作工具条 → 淡出；<b>拖动滑杆期间永不隐藏</b></td>
+          <td>桌面鼠标移动频繁，工具条常驻会一直压着正文；触屏端不变（点按切换）</td>
+        </tr>
+        <tr>
+          <td>多选</td>
+          <td>长按/右键 → 顶部栏变"已选 N 本"</td>
+          <td>勾选标记改为<b>左上角 18×18 方框</b>（2px 墨描边，选中填墨 + 白勾），封面压暗 12%</td>
+          <td>方形勾选块比圆形 ring 更符合档案语言，且不会在小封面上糊掉</td>
+        </tr>
+        <tr>
+          <td>目录当前章</td>
+          <td>朱砂左条 + primary-100 底</td>
+          <td>朱砂左条 + 淡朱砂底 + <b>编号变朱砂</b>；展开时自动滚到视图上 1/3 处</td>
+          <td>三重信号保证在 320px 窄栏里也能一眼定位；上 1/3 让"下一章"同时可见</td>
+        </tr>
+        <tr>
+          <td>焦点环</td>
+          <td>2px 黛青外描边</td>
+          <td>2px <b>墨色</b>外描边 + 2px offset；输入框额外点亮四角套准线</td>
+          <td>墨色焦点不会被误读成"选中状态"；套准线让聚焦这件事有品牌感</td>
+        </tr>
+        <tr>
+          <td>主题切换</td>
+          <td>整屏 300ms crossfade</td>
+          <td>保留 crossfade，但<b>正文与 chrome 分开 40ms</b>（chrome 先）</td>
+          <td>同时变会有一瞬"糊在一起"；错开 40ms 读起来像"灯先变、纸后变"</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="g2" style="margin-top:24px">
+      <div class="note">
+        <h4>桌面键盘映射（新增/确认）</h4>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+          <div class="check on"><i>✓</i><span><b>← →</b> / <b>PgUp PgDn</b> / <b>空格</b>　翻页</span></div>
+          <div class="check on"><i>✓</i><span><b>Ctrl + B</b>　目录栏开合</span></div>
+          <div class="check on"><i>✓</i><span><b>Ctrl + ,</b>　全局设置</span></div>
+          <div class="check on"><i>✓</i><span><b>Ctrl + K</b>　聚焦搜索框（书架）</span></div>
+          <div class="check on"><i>✓</i><span><b>Ctrl + 滚轮</b>　调字号（不缩放界面）</span></div>
+          <div class="check on"><i>✓</i><span><b>Esc</b>　逐级回退：面板 → 多选 → 阅读 → 书架</span></div>
+          <div class="check"><i></i><span><b>D</b>　切换深色（开发期便利，1.0 可不做）</span></div>
+        </div>
+      </div>
+      <div class="note">
+        <h4>动效时长（沿用 v1 令牌，只改两处）</h4>
+        <div style="margin-top:10px">
+          <table class="t">
+            <tbody>
+              <tr><td>翻页位移</td><td><code>220ms</code></td><td>不变</td></tr>
+              <tr><td>面板/浮层</td><td><code>280ms</code></td><td>不变</td></tr>
+              <tr><td>按压反馈</td><td><code>120ms</code></td><td>不变</td></tr>
+              <tr><td>悬停（书/按钮）</td><td><code>180ms</code></td><td class="yes">新增</td></tr>
+              <tr><td>顶部栏淡入</td><td><code>160ms</code></td><td class="yes">新增</td></tr>
+              <tr><td>主题 crossfade</td><td><code>300ms</code> + 40ms 错峰</td><td>微调</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 10 落地映射 ═══ -->
+  <section class="sec" id="s10">
+    <div class="sec-meta"><span class="sec-code">10 — TOKENS &amp; MIGRATION</span><span class="sec-line"></span><span class="sec-dot"></span></div>
+    <h2>落地：改令牌，不改结构</h2>
+    <p class="lead">Rust 内核、IPC 契约、分页算法、锚点体系<b>一行都不动</b>。本轮全部落在前端视觉层：<code style="font-family:var(--f-mono);font-size:11px">src/styles/main.css</code> 的令牌块 + 组件的样式类。这也是从 egui 换到 Tauri 时留下的最大红利。</p>
+
+    <table class="t" style="margin-top:20px">
+      <thead><tr><th>v1 令牌</th><th>v1 值</th><th>v2 令牌</th><th>v2 值</th><th>影响面</th></tr></thead>
+      <tbody>
+        <tr><td><code>--ui-surface</code></td><td>#FBF8F0</td><td><code>--c-canvas</code></td><td>#F4F3EF</td><td>全局底色</td></tr>
+        <tr><td><code>--ui-surface-2</code></td><td>#FFFFFF</td><td><code>--c-surface</code></td><td>#FDFCFA</td><td>卡片、侧栏选中</td></tr>
+        <tr><td><code>--ui-border</code></td><td>#E8E2D2</td><td><code>--c-rule</code></td><td>#E3E0D8</td><td>所有描边</td></tr>
+        <tr><td><code>--ui-text-1</code></td><td>#2B2B26</td><td><code>--c-ink</code></td><td>#1D1C19</td><td>正文/主按钮</td></tr>
+        <tr><td><code>--ui-text-2</code></td><td>#7A776D</td><td><code>--c-ink-2</code> / <code>--c-ink-3</code></td><td>#5F5B53 / #8E8A81</td><td>拆成两级，元数据单独一档</td></tr>
+        <tr><td><code>--ui-primary-500</code></td><td>#2E6B5A 黛青</td><td><code>--c-ink</code> + <code>--c-accent</code></td><td>#1D1C19 + #B4472F</td><td>主操作改墨；朱砂只做状态</td></tr>
+        <tr><td><code>--ui-radius-md/lg/xl</code></td><td>10/16/24px</td><td><code>--r-panel</code> / <code>--r-cover</code></td><td>4px / 3px</td><td>全站圆角</td></tr>
+        <tr><td><code>--ui-e1/e2/e3</code></td><td>三级阴影</td><td><code>--e-pop</code></td><td>仅浮层：<code>0 18px 44px -24px rgb(42 38 32/.45)</code></td><td>卡片取消阴影</td></tr>
+        <tr><td><code>--ui-text-xl</code></td><td>20px</td><td><code>--ui-text-2xl/3xl</code></td><td>28 / 34px</td><td>新增两档大标题</td></tr>
+        <tr><td><code>--rd-*</code></td><td>三主题</td><td>同名保留</td><td>仅微调 paper/night 数值</td><td>阅读区不动结构</td></tr>
+      </tbody>
+    </table>
+
+    <div class="g2" style="margin-top:22px">
+      <div class="note">
+        <h4>改动清单（按文件）</h4>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+          <div class="check on"><i>✓</i><span><code style="font-family:var(--f-mono);font-size:11px">src/styles/main.css</code>　令牌块整体替换 + 新增 <b>等宽层/套准线/立体书</b> 类</span></div>
+          <div class="check on"><i>✓</i><span><code style="font-family:var(--f-mono);font-size:11px">src/App.tsx</code>　新增桌面骨架（侧栏 + 主区），移动端走同一组件的断点分支</span></div>
+          <div class="check on"><i>✓</i><span><code style="font-family:var(--f-mono);font-size:11px">components/BookCover.tsx</code>　重写为「封面 + 顶面 + 书脊 + 落影」四层</span></div>
+          <div class="check on"><i>✓</i><span><code style="font-family:var(--f-mono);font-size:11px">components/BookCard.tsx</code>　去掉外部标题行，元数据进封面与列表行</span></div>
+          <div class="check on"><i>✓</i><span><code style="font-family:var(--f-mono);font-size:11px">pages/Shelf.tsx</code>　书墙改为「行 = 一组书 + 一根搁板」，列数测量保留</span></div>
+          <div class="check on"><i>✓</i><span><code style="font-family:var(--f-mono);font-size:11px">pages/Reader.tsx</code>　正文列限宽 620px；目录改桌面右栏；顶栏 hover 呼出</span></div>
+          <div class="check on"><i>✓</i><span><code style="font-family:var(--f-mono);font-size:11px">components/Dialogs.tsx / Toast.tsx</code>　圆角与配色换令牌</span></div>
+          <div class="check"><i></i><span><code style="font-family:var(--f-mono);font-size:11px">docs/05-UI设计规范系统.md</code>　按本稿重写 §2 / §3 / §4（<b>待你点头后动</b>）</span></div>
+        </div>
+      </div>
+      <div class="note">
+        <h4>性能与兼容约束（继承 v1）</h4>
+        <ul>
+          <li>立体书只用 <b>transform / box-shadow / 静态渐变</b>，不引入 filter 动画；一屏 18 本，DOM 节点 6×18 = 108，可接受</li>
+          <li><code style="font-family:var(--f-mono);font-size:11px">backdrop-filter</code> 只允许出现在<b>浮层</b>（顶栏、底栏、Toast），书墙与正文禁用——这是 v1 就定的护栏</li>
+          <li>正文列宽用 <code style="font-family:var(--f-mono);font-size:11px">max-width:620px</code>，分页 stride 仍按视口宽计算，<b>锚点算法不受影响</b></li>
+          <li>等宽字体走系统栈（Cascadia/Consolas），不新增字体文件</li>
+          <li>vite target 仍为 chrome90：<code style="font-family:var(--f-mono);font-size:11px">color-mix()</code> 不可用，色值一律写死十六进制</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 11 待确认 ═══ -->
+  <section class="sec" id="s11">
+    <div class="sec-meta"><span class="sec-code">11 — OPEN DECISIONS</span><span class="sec-line"></span><span class="sec-dot"></span></div>
+    <h2>五个需要你拍板的点</h2>
+    <p class="lead">以下是我做了判断但<b>不该替你决定</b>的地方。每条都给了推荐值，你说「按推荐」我就照此执行。</p>
+
+    <table class="t" style="margin-top:20px">
+      <thead><tr><th>#</th><th>问题</th><th>选项</th><th>我的建议</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>D1</td>
+          <td>桌面端是否允许独立骨架（左侧栏）？</td>
+          <td>A. 允许（本稿方案）<br>B. 坚持「大号手机」，只做密度差异</td>
+          <td class="yes">A。桌面优先期，1440 宽下 v1 两侧各空 300px；若坚持 B，本稿侧栏内容改为顶栏右侧的「最近阅读」下拉</td>
+        </tr>
+        <tr>
+          <td>D2</td>
+          <td>黛青是否彻底退场？</td>
+          <td>A. 退场：墨 + 朱砂（本稿）<br>B. 保留黛青做「进度/选中」色</td>
+          <td class="yes">A。两个强调色会互相打架；若日后想找回品牌色，只需把 <code>--c-ink</code> 换回黛青，其余不动</td>
+        </tr>
+        <tr>
+          <td>D3</td>
+          <td>书架是否保留「封面外标题」？</td>
+          <td>A. 移除，书名印在封面（本稿）<br>B. 保留 1 行标题 + 1 行进度</td>
+          <td class="yes">A。B 会让墙回到"卡片阵列"；代价是书名小字在 84px 封面上略吃力，靠 hover/tooltip 兜底</td>
+        </tr>
+        <tr>
+          <td>D4</td>
+          <td>桌面阅读是否做「对页双栏」？</td>
+          <td>A. 1.0 不做，单页 620px（本稿）<br>B. ≥1200px 时双栏对页</td>
+          <td class="yes">A。双栏要把 stride 改成两页一跳，会碰分页与锚点两处核心逻辑，1.0 不值得</td>
+        </tr>
+        <tr>
+          <td>D5</td>
+          <td>字号默认值</td>
+          <td>A. 桌面 20px（本稿沿用 v1）<br>B. 桌面 19px，行高 1.95</td>
+          <td class="yes">A。20px + 620px 列宽 ≈ 31 字/行，是中文舒适区上限；若要更密可降到 19</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note" style="margin-top:24px;border-left:2px solid var(--c-ink)">
+      <h4>下一步（等你确认后）</h4>
+      <p>① 按本稿改写 <code style="font-family:var(--f-mono);font-size:11px">docs/05-UI设计规范系统.md</code>（令牌表、组件规格、决策速查全部同步，不留陈旧描述）→ ② 落 <code style="font-family:var(--f-mono);font-size:11px">main.css</code> 令牌 → ③ 先改书墙与书封（视觉收益最大、风险最低）→ ④ 再动桌面骨架 → ⑤ 最后改阅读页限宽与目录栏。<br><b>本轮不写任何产品代码</b>，等你在这五条上表态。</p>
+    </div>
+
+    <p style="margin-top:46px;font-family:var(--f-mono);font-size:9px;letter-spacing:1.05px;color:var(--c-ink-3)">
+      END OF SPEC · DOC UI-002 · 2026.10.18 · 参考：github.com/mikufoxxx/Wenku8_Flutter（archive_design.dart / archive_shelf_geometry.dart）
+    </p>
+  </section>
+
+</div>
+</body>
+</html>

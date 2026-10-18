@@ -73,18 +73,25 @@ export function Diagnostics({
   }, [draft]);
 
   return (
-    <div className="rd-shell" style={{ background: "var(--ui-surface)" }}>
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
-        <header className="flex items-center gap-1">
+    <div
+      className="ui-shelf"
+      style={{ background: "var(--ui-surface)", overflowY: "auto" }}
+    >
+      {/* 与书架共用 .ui-page：桌面骨架下左右边缘对齐同一条 936 栏宽（P5 清理） */}
+      <div className="ui-page flex flex-col gap-5 pb-8">
+        <header className="flex items-center gap-2 pt-6">
           <button
             type="button"
             onClick={onBack}
             aria-label="返回书架"
-            className="ui-btn-icon"
+            className="ui-icon-btn"
           >
-            <ChevronLeft size={24} strokeWidth={2} />
+            <ChevronLeft size={20} strokeWidth={2} />
           </button>
-          <h1 className="text-xl font-medium tracking-tight">诊断与自检</h1>
+          <div className="min-w-0">
+            <p className="ui-page-kicker">DIAGNOSTICS / SELF-CHECK</p>
+            <h1 className="ui-page-title">诊断与自检</h1>
+          </div>
           <span className="flex-1" />
           <StatusPill phase={phase} />
         </header>
@@ -145,13 +152,13 @@ function StatusPill({ phase }: { phase: Phase }) {
   const tones = {
     loading: {
       text: "正在自检…",
-      bg: "var(--ui-primary-100)",
-      fg: "var(--ui-primary-600)",
+      bg: "var(--ui-ok-soft)",
+      fg: "var(--ui-ok)",
     },
     ready: {
       text: "IPC 链路正常",
-      bg: "var(--ui-primary-100)",
-      fg: "var(--ui-primary-600)",
+      bg: "var(--ui-ok-soft)",
+      fg: "var(--ui-ok)",
     },
     failed: {
       text: "链路异常",
@@ -273,10 +280,10 @@ function EchoCard({
           }}
           spellCheck={false}
           placeholder="输入一段中文试试"
-          className="h-11 min-w-0 flex-1 rounded-[10px] px-3 text-[15px] outline-none"
+          className="h-11 min-w-0 flex-1 rounded-[var(--ui-radius-md)] px-3 text-[15px] outline-none"
           style={{
             background: "var(--ui-surface)",
-            border: "0.5px solid var(--ui-border)",
+            border: "1px solid var(--ui-border-strong)",
             color: "var(--ui-text-1)",
           }}
         />
@@ -303,12 +310,15 @@ function EchoCard({
 
       {result !== null && (
         <div
-          className="mt-3 rounded-[10px] p-3"
-          style={{ background: "var(--ui-primary-100)" }}
+          className="mt-3 p-3"
+          style={{
+            background: "var(--ui-ok-soft)",
+            borderRadius: "var(--ui-radius-md)",
+          }}
         >
           <p
             className="text-[13px] font-medium"
-            style={{ color: "var(--ui-primary-600)" }}
+            style={{ color: "var(--ui-ok)" }}
           >
             Rust 侧回传
           </p>
@@ -317,7 +327,7 @@ function EchoCard({
           </p>
           <p
             className="tnum mt-1 text-[13px]"
-            style={{ color: "var(--ui-primary-600)" }}
+            style={{ color: "var(--ui-ok)" }}
           >
             字符 {result.charCount} · 字节 {result.byteLength}
             {matched ? " · 与前端一致 ✓" : " · 与前端不一致 ✗"}
@@ -349,8 +359,11 @@ function SectionTitle({ title, note }: { title: string; note: string }) {
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div
-      className="rounded-xl px-3 py-3"
-      style={{ background: "var(--ui-surface-2)" }}
+      className="px-3 py-3"
+      style={{
+        background: "var(--ui-surface-2)",
+        borderRadius: "var(--ui-radius-lg)",
+      }}
     >
       <p className="text-[13px]" style={{ color: "var(--ui-text-2)" }}>
         {label}
@@ -378,7 +391,7 @@ function Row({
   return (
     <div
       className="flex items-baseline justify-between gap-4 py-2"
-      style={last ? undefined : { borderBottom: "0.5px solid var(--ui-border)" }}
+      style={last ? undefined : { borderBottom: "1px solid var(--ui-border)" }}
     >
       <dt className="shrink-0 text-[13px]" style={{ color: "var(--ui-text-2)" }}>
         {label}

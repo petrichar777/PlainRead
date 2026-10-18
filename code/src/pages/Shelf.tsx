@@ -17,25 +17,32 @@ import { filterBooks } from "../lib/search";
 import { Toast, type ToastState } from "../components/Toast";
 import type { BookSummary } from "../ipc/bindings";
 import { commands, events } from "../ipc/bindings";
+import { coverChar, coverPair } from "../lib/cover";
 import { describeError } from "../lib/error";
+import { approxChapter } from "../lib/format";
+import { DESKTOP_QUERY, useMediaQuery } from "../lib/media-query";
 import { sampleBooks } from "../lib/mock";
 
 /**
- * 书架页（docs/05 §3.1，M1 交付物）。
+ * 书架页（docs/05 §3.1，M1 交付物；v2 见 docs/06 §4.4）。
  *
  * 已实现：列表/网格自适应切换（双态记忆）、生成式封面、导入按钮、
  * 长按/右键多选 → 删除（含确认）/重命名、导入事件消费（进度横幅 +
  * 完成刷新 + 重复提示）、空/载/错三态。
  *
- * 边界说明：M1 核心工作（redb 仓储 + 导入管线）落地前，
- * `list_books` 返回空、导入命令返回"开发中"错误——
- * 空状态与错误路径因此现在就是真实路径，不是模拟。
- * 点按书卡进阅读页的动作在 M2 接上（`open_book`）。
+ * P2 起书架吃桌面骨架：页头（kicker + 34px 标题 + 搜索/视图/导入）、
+ * 继续阅读卡、书墙三者共用 `.ui-page`，左右边缘因此天然对齐。
+ * 桌面无需页头齿轮（侧栏已有入口），窄屏才保留它。
  */
 
 type ViewMode = "grid" | "list";
 
 const VIEW_KEY = "plainread.shelfView";
+
+/** 搜索快捷键提示要跟平台走：Windows 上写 ⌘K 是错的。 */
+const SEARCH_HINT = /Mac|iPhone|iPad/.test(navigator.userAgent)
+  ? "⌘K"
+  : "Ctrl K";
 
 function loadView(): ViewMode {
   try {
@@ -45,13 +52,11 @@ function loadView(): ViewMode {
   }
 }
 
-/* ── 书墙布局参数（§3.1：手机 3 列，平板/桌面 4–6 列） ────────── */
+/* ── 书墙布局（§4.4 / §6 速查） ─────────────────────────────────
+   书宽 --bw、书间距 --shelf-gap 都由 CSS 变量说了算（桌面 120/26，手机 84/16），
+   JS 只负责"读出来算列数"。这样断点调整视觉参数不必改 TS。 */
 
-/** 单列最小宽度：保证 3:4 封面在窄屏也不局促 */
-const SHELF_MIN_COL = 104;
-/** 列间距，与 Tailwind 的 gap-x-3.5（14px）对应 */
-const SHELF_GAP = 14;
-/** 列数上限：超宽屏下封面过大就不再增列，剩余宽度交给限容器 */
+/** 列数上限：超宽屏下封面过大就不再增列，剩余宽度交给限容器（936px） */
 const SHELF_MAX_COLS = 6;
 
 /**
@@ -65,14 +70,26 @@ const SHELF_MAX_COLS = 6;
  * **必然**先发一次初始回调，同步测量是多余的（还会撞 react-hooks 的
  * set-state-in-effect 规则）。
  */
-function useColumnCount(el: HTMLDivElement | null): number {
-  const [cols, setCols] = useState(3);
+function useShelfColumns(el: HTMLDivElement | null): number {
+  const [cols, setCols] = useState(SHELF_MAX_COLS);
   useEffect(() => {
     if (el === null) return;
+    const measure = (width: number) => {
+      const css = getComputedStyle(el);
+      const bw = Number.parseFloat(css.getPropertyValue("--bw")) || 120;
+      const gap = Number.parseFloat(css.getPropertyValue("--shelf-gap")) || 26;
+      // 每本书实际占位 = 封面宽 + 书脊厚（与 CSS 里 --sp 的 clamp 规则同源）
+      const spine = Math.min(18, Math.max(10, bw * 0.117));
+      const cell = bw + spine;
+      setCols(
+        Math.min(
+          SHELF_MAX_COLS,
+          Math.max(1, Math.floor((width + gap) / (cell + gap))),
+        ),
+      );
+    };
     const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width ?? 0;
-      const count = Math.floor((width + SHELF_GAP) / (SHELF_MIN_COL + SHELF_GAP));
-      setCols(Math.min(SHELF_MAX_COLS, Math.max(1, count)));
+      measure(entries[0]?.contentRect.width ?? 0);
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -80,11 +97,36 @@ function useColumnCount(el: HTMLDivElement | null): number {
   return cols;
 }
 
+/* ── 导入进度（B 态：2px 朱砂线 + 等宽进度） ─────────────────── */
+
+const IMPORT_STAGES = [
+  "decoding",
+  "normalizing",
+  "chapterizing",
+  "storing",
+] as const;
+
+const IMPORT_STAGE_LABEL: Record<(typeof IMPORT_STAGES)[number], string> = {
+  decoding: "DECODING",
+  normalizing: "NORMALIZING",
+  chapterizing: "CHAPTERIZING",
+  storing: "STORING",
+};
+
+/** 单文件的阶段内进度 + 批内位置 = 整体百分比（没有字节数，用阶段推进代替）。 */
+function importPct(p: { index: number; total: number; stage: string }): number {
+  const step = IMPORT_STAGES.indexOf(p.stage as (typeof IMPORT_STAGES)[number]);
+  const within = ((step < 0 ? 0 : step) + 1) / IMPORT_STAGES.length;
+  const total = Math.max(1, p.total);
+  return Math.min(100, ((p.index + within) / total) * 100);
+}
+
 export function Shelf({
   preview,
   onExitPreview,
   onOpenDiagnostics,
   onOpenBook,
+  onBooksChange,
 }: {
   /** 视觉预览模式：使用示例数据，不走 IPC（入口在诊断页）。 */
   preview: boolean;
@@ -92,6 +134,8 @@ export function Shelf({
   onOpenDiagnostics: () => void;
   /** 单击书卡进入阅读页（M2）。 */
   onOpenBook: (bookId: string) => void;
+  /** 书架数据变化时推给外层（侧栏的书目统计与最近在读靠它）。 */
+  onBooksChange?: (books: BookSummary[]) => void;
 }) {
   const [books, setBooks] = useState<BookSummary[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -101,11 +145,14 @@ export function Shelf({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [renameTarget, setRenameTarget] = useState<BookSummary | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const searchRef = useRef<HTMLInputElement | null>(null);
   /** 导入进度横幅的数据源；导入事件只有管线落地后才会真正到达。 */
   const [importing, setImporting] = useState<{
     file: string;
     index: number;
     total: number;
+    stage: string;
   } | null>(null);
 
   // 副标题里的"今天/昨天"以进入本页的时刻为准，避免渲染期间跳动；
@@ -121,12 +168,30 @@ export function Shelf({
   // 书墙：按列数把书切成行，每行下面垫一根搁板。
   // callback ref（元素就绪即通知 state），保证容器挂载后 Observer 能接上
   const [shelfEl, setShelfEl] = useState<HTMLDivElement | null>(null);
-  const cols = useColumnCount(shelfEl);
+  const cols = useShelfColumns(shelfEl);
 
   // 搜索：纯客户端过滤（列表已在内存，无需后端参与）
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => filterBooks(data ?? [], query), [data, query]);
   const searchMissed = data !== null && data.length > 0 && filtered.length === 0;
+
+  // 书架数据变化 → 推给外层（侧栏）。预览模式也推，保证"预览即所见"。
+  useEffect(() => {
+    if (data !== null) onBooksChange?.(data);
+  }, [data, onBooksChange]);
+
+  // ⌘K / Ctrl+K 聚焦搜索（§7：只加快捷键，过滤逻辑不动）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const rows = useMemo(() => {
     const list = filtered;
@@ -301,96 +366,133 @@ export function Shelf({
   );
 
   const selectedBooks = data?.filter((b) => selected.has(b.id)) ?? [];
+  const total = data?.length ?? 0;
+  // 继续阅读：取最近在读的第一本，且必须真的读过（§4.4）
+  const hero =
+    data !== null && data.length > 0 && data[0].progressPercent !== null
+      ? data[0]
+      : null;
 
   return (
-    <div
-      className="flex h-full flex-col"
-      style={{ background: "var(--ui-surface)" }}
-    >
-      {/* 顶部栏：56px，标题左对齐，导入为主按钮（§3.1） */}
-      <header
-        className="flex shrink-0 items-center justify-between px-4"
-        style={{
-          paddingTop: "calc(var(--safe-top) + 10px)",
-          paddingBottom: 10,
-        }}
-      >
+    <div className="ui-shelf" style={{ background: "var(--ui-surface)" }}>
+      {/* 页头（§4.4）：kicker + 34px 标题 + 右组（搜索 / 视图 / 导入）。
+          多选态复用同一套尺寸，切换模式时书墙不会跳高度。 */}
+      <header className="ui-page ui-page-head">
         {selectionMode ? (
           <>
-            <p className="text-[15px] font-medium" style={{ color: "var(--ui-text-1)" }}>
-              已选 {selected.size} 本
-            </p>
-            <div className="flex items-center gap-1">
+            <div className="min-w-0">
+              <p className="ui-page-kicker">
+                SELECTION <s /> {selected.size} OF {total}
+              </p>
+              <h1 className="ui-page-title">已选 {selected.size} 本</h1>
+            </div>
+            <div className="ui-page-actions">
               <button
                 type="button"
                 aria-label="重命名"
                 title="重命名（仅支持单选）"
                 disabled={selected.size !== 1}
                 onClick={() => setRenameTarget(selectedBooks[0] ?? null)}
-                className="ui-btn-icon disabled:opacity-40"
+                className="ui-icon-btn"
               >
-                <PenLine size={20} strokeWidth={2} />
+                <PenLine size={18} strokeWidth={2} />
               </button>
               <button
                 type="button"
                 aria-label="删除"
                 disabled={selected.size === 0}
                 onClick={() => setConfirmDelete(true)}
-                className="ui-btn-icon disabled:opacity-40"
+                className="ui-icon-btn"
                 style={{ color: "var(--ui-danger)" }}
               >
-                <Trash2 size={20} strokeWidth={2} />
+                <Trash2 size={18} strokeWidth={2} />
               </button>
               <button
                 type="button"
                 aria-label="退出多选"
                 onClick={exitSelection}
-                className="ui-btn-icon"
+                className="ui-icon-btn"
               >
-                <X size={20} strokeWidth={2} />
+                <X size={18} strokeWidth={2} />
               </button>
             </div>
           </>
         ) : (
           <>
-            <div className="flex items-baseline gap-2">
-              <h1
-                style={{
-                  fontSize: "var(--ui-text-xl)",
-                  fontWeight: 600,
-                  color: "var(--ui-text-1)",
-                }}
-              >
-                书架
-              </h1>
-              {preview && (
-                <span className="rd-chip" style={{ background: "var(--ui-accent-100)", color: "var(--ui-accent-500)" }}>
-                  示例数据 · 视觉预览
-                </span>
-              )}
+            <div className="min-w-0">
+              <p className="ui-page-kicker">
+                SHELF / {total} VOL. <s /> SORTED BY LAST READ
+              </p>
+              <div className="flex items-baseline gap-3">
+                <h1 className="ui-page-title">书架</h1>
+                {preview && (
+                  <span
+                    className="rd-chip"
+                    style={{
+                      border: "1px solid var(--ui-border-strong)",
+                      color: "var(--ui-text-2)",
+                    }}
+                  >
+                    示例数据 · 视觉预览
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
+
+            <div className="ui-page-actions">
+              {/* 搜索框：客户端过滤，列表在内存里，敲下即见 */}
+              <div className="ui-search">
+                <Search
+                  size={14}
+                  strokeWidth={2}
+                  style={{ color: "var(--ui-text-3)", flex: "none" }}
+                  aria-hidden
+                />
+                <input
+                  ref={searchRef}
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Escape") return;
+                    e.stopPropagation();
+                    if (query !== "") setQuery("");
+                    else e.currentTarget.blur();
+                  }}
+                  placeholder="搜索书名或作者"
+                  aria-label="搜索书架"
+                />
+                {query === "" ? (
+                  <kbd>{SEARCH_HINT}</kbd>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label="清空搜索"
+                    onClick={() => setQuery("")}
+                    className="ui-icon-btn"
+                    style={{ width: 20, height: 20 }}
+                  >
+                    <X size={12} strokeWidth={2} />
+                  </button>
+                )}
+                <span className="ui-reg ui-reg-tl" aria-hidden />
+                <span className="ui-reg ui-reg-tr" aria-hidden />
+                <span className="ui-reg ui-reg-bl" aria-hidden />
+                <span className="ui-reg ui-reg-br" aria-hidden />
+              </div>
+
               {preview && (
                 <button
                   type="button"
                   onClick={onExitPreview}
                   aria-label="退出预览"
-                  className="ui-btn-icon"
+                  className="ui-icon-btn"
                 >
-                  <X size={20} strokeWidth={2} />
+                  <X size={18} strokeWidth={2} />
                 </button>
               )}
-              <div
-                className="flex items-center"
-                style={{
-                  borderRadius: "var(--ui-radius-md)",
-                  border: "0.5px solid var(--ui-border)",
-                  background: "var(--ui-surface-2)",
-                  padding: 2,
-                }}
-                role="group"
-                aria-label="视图切换"
-              >
+
+              <div className="ui-seg" role="group" aria-label="视图切换">
                 {(
                   [
                     ["grid", LayoutGrid, "网格视图"],
@@ -403,33 +505,34 @@ export function Shelf({
                     aria-label={label}
                     aria-pressed={view === mode}
                     onClick={() => switchView(mode)}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg"
-                    style={{
-                      background:
-                        view === mode ? "var(--ui-primary-500)" : "transparent",
-                      color: view === mode ? "#ffffff" : "var(--ui-text-2)",
-                    }}
+                    className={
+                      view === mode ? "ui-seg-item ui-seg-item--on" : "ui-seg-item"
+                    }
                   >
-                    <Icon size={16} strokeWidth={2} />
+                    <Icon size={15} strokeWidth={2} />
                   </button>
                 ))}
               </div>
-              <button
-                type="button"
-                onClick={onOpenDiagnostics}
-                aria-label="诊断与自检"
-                title="诊断与自检"
-                className="ui-btn-icon"
-              >
-                <Settings size={20} strokeWidth={2} />
-              </button>
+
+              {/* 桌面把诊断入口放在侧栏底部（§4.5），窄屏才保留这个齿轮位 */}
+              {!isDesktop && (
+                <button
+                  type="button"
+                  onClick={onOpenDiagnostics}
+                  aria-label="设置与诊断"
+                  title="设置与诊断"
+                  className="ui-icon-btn"
+                >
+                  <Settings size={18} strokeWidth={2} />
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={handleImport}
-                className="ui-btn-primary h-11 px-4"
-                style={{ fontSize: "var(--ui-text-base)" }}
+                className="ui-btn-primary ui-btn-primary--compact"
               >
-                <BookPlus size={20} strokeWidth={2} />
+                <BookPlus size={15} strokeWidth={2} />
                 导入
               </button>
             </div>
@@ -437,71 +540,98 @@ export function Shelf({
         )}
       </header>
 
-      {/* 导入进度横幅：消费 import://progress 事件 */}
+      {/* 导入中（B 态）：2px 朱砂进度线 + 等宽阶段/批内进度。
+          契约里没有字节数（§7 数据缺口），用"阶段推进 + 批内序号"表达进展。 */}
       {importing !== null && (
-        <div className="px-4">
-          <div
-            className="mb-2 rounded-xl px-3 py-2"
-            style={{
-              background: "var(--ui-primary-100)",
-              color: "var(--ui-primary-600)",
-            }}
+        <div className="ui-page pb-3">
+          <p className="ui-mono text-[8.5px]" style={{ color: "var(--ui-text-3)" }}>
+            IMPORTING · {importing.index + 1} / {importing.total}
+          </p>
+          <p
+            className="mt-2 truncate text-[13.5px] font-semibold"
+            style={{ color: "var(--ui-text-1)" }}
           >
-            <p className="text-[13px]">
-              正在导入「{importing.file}」（{importing.index + 1}/
-              {importing.total}）…
-            </p>
+            {importing.file}
+          </p>
+          <div className="mt-3 h-0.5" style={{ background: "var(--ui-border)" }}>
             <div
-              className="mt-1.5 h-1 overflow-hidden rounded-full"
-              style={{ background: "rgb(255 255 255 / 0.6)" }}
-            >
-              <div
-                className="rd-pulse h-full rounded-full"
-                style={{
-                  width: "100%",
-                  background: "var(--ui-primary-500)",
-                }}
-              />
-            </div>
+              className="rd-pulse h-full"
+              style={{
+                width: `${importPct(importing)}%`,
+                background: "var(--ui-accent-500)",
+              }}
+            />
+          </div>
+          <div className="mt-2 flex items-center justify-between">
+            <span className="ui-mono text-[8.5px]" style={{ color: "var(--ui-text-3)" }}>
+              {IMPORT_STAGE_LABEL[
+                importing.stage as (typeof IMPORT_STAGES)[number]
+              ] ?? "IMPORTING"}
+            </span>
+            <span className="ui-mono text-[8.5px]" style={{ color: "var(--ui-text-3)" }}>
+              {Math.round(importPct(importing))}%
+            </span>
           </div>
         </div>
       )}
 
-      {/* 搜索栏：客户端过滤，列表在内存里，敲下即见 */}
-      <div className="px-4 pb-1">
-        <div
-          className="mx-auto flex max-w-3xl items-center gap-2 px-3 py-2"
-          style={{
-            borderRadius: "var(--ui-radius-md)",
-            border: "0.5px solid var(--ui-border)",
-            background: "var(--ui-surface-2)",
-          }}
+      {/* 继续阅读（§4.4）：只在"读过且没读完"的书上出现。
+          章节号是库里的进度百分比反推的近似值——BookSummary 没有章索引（§7 数据缺口），
+          这只影响这条文案，不参与任何位置计算。 */}
+      {hero !== null && (
+        <button
+          type="button"
+          className="ui-page ui-resume"
+          onClick={() => handleOpen(hero)}
+          aria-label={`继续阅读《${hero.title}》`}
         >
-          <Search size={16} strokeWidth={2} style={{ color: "var(--ui-text-2)", flex: "none" }} />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索书名或作者"
-            aria-label="搜索书架"
-            className="min-w-0 flex-1 bg-transparent text-[14px] outline-none"
-            style={{ color: "var(--ui-text-1)" }}
-          />
-          {query !== "" && (
-            <button
-              type="button"
-              aria-label="清空搜索"
-              onClick={() => setQuery("")}
-              className="ui-btn-icon"
-              style={{ width: 28, height: 28 }}
-            >
-              <X size={14} strokeWidth={2} />
-            </button>
-          )}
-        </div>
-      </div>
+          <span
+            className="ui-resume-cover"
+            aria-hidden
+            style={
+              {
+                "--book-a": coverPair(hero.title).a,
+                "--book-b": coverPair(hero.title).b,
+              } as React.CSSProperties
+            }
+          >
+            <span className="ui-resume-cover-char">{coverChar(hero.title)}</span>
+          </span>
+          <span className="ui-resume-mid">
+            <span className="ui-resume-k">
+              <i aria-hidden />
+              继续阅读
+            </span>
+            <span className="ui-resume-title">{hero.title}</span>
+            <span className="ui-resume-meta">
+              <span>
+                CH.{approxChapter(hero)} / {hero.chapterCount}
+              </span>
+              <span className="ui-resume-bar" aria-hidden>
+                <i
+                  style={{
+                    width: `${Math.min(100, Math.max(0, hero.progressPercent ?? 0))}%`,
+                  }}
+                />
+              </span>
+            </span>
+          </span>
+          <span className="ui-resume-right">
+            <span>
+              <span className="ui-resume-pct">
+                {Math.min(100, Math.max(0, Math.round(hero.progressPercent ?? 0)))}
+                <small>%</small>
+              </span>
+            </span>
+            <span className="ui-btn-primary" style={{ height: 40, padding: "0 18px" }}>
+              打开
+            </span>
+          </span>
+        </button>
+      )}
 
-      <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+      <main className="min-h-0 flex-1 overflow-y-auto pb-6">
+        <div className="ui-page">
         {!preview && loadError !== null ? (
           <ErrorState message={loadError} onRetry={() => void refresh()} />
         ) : data === null ? (
@@ -514,21 +644,17 @@ export function Shelf({
             没有找到与「{query.trim()}」匹配的书
           </p>
         ) : view === "grid" ? (
-          /* 书墙式（§3.1，2026-10-11 owner 确认）：每行书立于一根连续搁板上，
-             整体居中限宽——微信读书的空间结构，纵向滚动 */
-          <div ref={setShelfEl} className="mx-auto max-w-3xl">
+          /* 书墙（§4.4）：每行书立于一根贯通搁板上，书名印在封面里，
+             容器 936px 居中、书间 26px、行距 26px */
+          <div ref={setShelfEl} className="ui-wall">
             {rows.map((row, rowIndex) => (
-              <div key={rowIndex} className={rowIndex === rows.length - 1 ? undefined : "mb-6"}>
-                <div
-                  className="grid gap-x-3.5"
-                  style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-                >
+              <div key={rowIndex} className="ui-wall-row">
+                <div className="ui-wall-books">
                   {row.map((book) => (
                     <BookCard
                       key={book.id}
                       book={book}
                       view="grid"
-                      now={now}
                       selectionMode={selectionMode}
                       selected={selected.has(book.id)}
                       onOpen={handleOpen}
@@ -542,13 +668,13 @@ export function Shelf({
             ))}
           </div>
         ) : (
-          <div className="mx-auto flex max-w-xl flex-col gap-1">
+          /* 列表（§4.3）：52px 行、等宽元数据主导，无卡片无阴影 */
+          <div>
             {filtered.map((book) => (
               <BookCard
                 key={book.id}
                 book={book}
                 view="list"
-                now={now}
                 selectionMode={selectionMode}
                 selected={selected.has(book.id)}
                 onOpen={handleOpen}
@@ -557,6 +683,7 @@ export function Shelf({
             ))}
           </div>
         )}
+        </div>
       </main>
 
       <ConfirmDialog
@@ -583,12 +710,12 @@ export function Shelf({
 /* ── 三态里的另外两态：骨架与错误 ─────────────────────────────── */
 
 /**
- * 首载骨架（§4 Skeleton：300ms 后才出现，避免闪烁）。
- * 形态与真实书墙一致：占位封面 + 搁板——加载时"书架就已经在了"。
+ * 首载骨架（§4.4）：立体书形状（face 单层即可）+ 空搁板。
+ * 几何与真实书墙同构——加载时"书架就已经在了"。
  */
 function SkeletonShelf() {
   const [skeletonEl, setSkeletonEl] = useState<HTMLDivElement | null>(null);
-  const cols = useColumnCount(skeletonEl);
+  const cols = useShelfColumns(skeletonEl);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const id = window.setTimeout(() => setVisible(true), 300);
@@ -603,30 +730,16 @@ function SkeletonShelf() {
   return (
     <div
       ref={setSkeletonEl}
-      className="mx-auto max-w-3xl"
+      className="ui-wall"
       aria-label="正在加载书架"
       role="status"
     >
       {rows.map((count, rowIndex) => (
-        <div key={rowIndex} className={rowIndex === rows.length - 1 ? undefined : "mb-6"}>
-          <div
-            className="grid gap-x-3.5"
-            style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-          >
+        <div key={rowIndex} className="ui-wall-row">
+          <div className="ui-wall-books">
             {Array.from({ length: count }, (_, i) => (
-              <div key={i}>
-                <div
-                  className="rd-pulse"
-                  style={{
-                    aspectRatio: "3 / 4",
-                    borderRadius: "var(--ui-radius-book)",
-                    background: "var(--ui-border)",
-                  }}
-                />
-                <div
-                  className="rd-pulse mt-2 h-3 w-3/4 rounded"
-                  style={{ background: "var(--ui-border)" }}
-                />
+              <div key={i} className="ui-book-card">
+                <div className="ui-book ui-skeleton-book rd-pulse" />
               </div>
             ))}
           </div>
